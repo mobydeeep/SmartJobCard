@@ -379,13 +379,13 @@ tr.sel-on{background:color-mix(in srgb,var(--accent) 9%,transparent)}
 .plan-grid .ph.ph-sel{background:#E8A100;color:#1a1a1a}
 .plan-month{scroll-margin-top:calc(var(--topbar-h,0px) + 8px);margin:14px 0;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:12px 14px}
 .plan-month h3{font-size:14px;margin:0 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.plan-month .pm-cat{font-size:12px;font-weight:700;color:var(--fg-muted);margin:10px 0 4px;letter-spacing:.02em}
-.plan-month .pm-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13.5px;flex-wrap:wrap}
-.plan-month .pm-row:hover{background:var(--surface-2)}
-.plan-month .pm-row.done{opacity:.55}
-.plan-month .pm-row .no{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-muted)}
-.plan-month .pm-row .rule{font-size:11.5px;color:var(--fg-muted)}
-.plan-month .pm-row .st{color:#E8A100;font-size:11px;letter-spacing:-1px}
+.pm-cat{font-size:12px;font-weight:700;color:var(--fg-muted);margin:10px 0 4px;letter-spacing:.02em}
+.pm-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13.5px;flex-wrap:wrap}
+.pm-row:hover{background:var(--surface-2)}
+.pm-row.done{opacity:.55}
+.pm-row .no{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-muted)}
+.pm-row .rule{font-size:11.5px;color:var(--fg-muted)}
+.pm-row .st{color:#E8A100;font-size:11px;letter-spacing:-1px}
 .plan-pick-cat{display:flex;align-items:center;gap:10px;margin:14px 0 4px;font-size:13px;font-weight:700}
 .plan-pick-cat a{font-size:12px;font-weight:500;cursor:pointer;color:var(--accent);text-decoration:underline}
 .plan-pick-row{display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:13px;cursor:pointer}
@@ -2145,21 +2145,43 @@ function renderPlan(){
 
   var header = '<div class="ph">분류 \\ 월</div>'+MONTH_NAMES.map(function(mn,i){return '<div class="ph'+((i+1)===planMobMonth?' ph-sel':'')+'" data-ph-m="'+(i+1)+'" title="'+mn+' 업무 목록 보기">'+mn+'</div>';}).join("");
 
-  /* 선택한 달의 분류별 업무 목록 */
-  var pmMo = planMobMonth, pmCount = 0;
-  var pmBody = Object.keys(grid).map(function(cat){
-    var items = grid[cat][pmMo]||[];
-    if(!items.length) return "";
-    pmCount += items.length;
-    return '<div class="pm-cat">'+esc(cat)+' · '+items.length+'건</div>'+items.map(function(c){
-      var rl = ruleLabel(c.schedule_rule), isDone = isDoneKey(c, periodKey(planYear, pmMo));
-      var st = "★★★★★☆☆☆☆☆".slice(5-(c.importance||0),10-(c.importance||0));
-      return '<div class="pm-row'+(isDone?' done':'')+'" data-goto-card="'+esc(c.id)+'"><span class="no">'+esc(c.no)+'</span><span>'+(isDone?'✓ ':'')+esc(c.title)+'</span>'+periodBadges(c)+(rl?'<span class="rule">'+esc(rl)+'</span>':'')+'<span class="st">'+st+'</span></div>';
+  /* 선택한 달의 분류별 업무 목록(팝업) */
+  function monthListHtml(pmMo){
+    var pmCount = 0;
+    var pmBody = Object.keys(grid).map(function(cat){
+      var items = grid[cat][pmMo]||[];
+      if(!items.length) return "";
+      pmCount += items.length;
+      return '<div class="pm-cat">'+esc(cat)+' · '+items.length+'건</div>'+items.map(function(c){
+        var rl = ruleLabel(c.schedule_rule), isDone = isDoneKey(c, periodKey(planYear, pmMo));
+        var st = "★★★★★☆☆☆☆☆".slice(5-(c.importance||0),10-(c.importance||0));
+        return '<div class="pm-row'+(isDone?' done':'')+'" data-goto-card="'+esc(c.id)+'"><span class="no">'+esc(c.no)+'</span><span>'+(isDone?'✓ ':'')+esc(c.title)+'</span>'+periodBadges(c)+(rl?'<span class="rule">'+esc(rl)+'</span>':'')+'<span class="st">'+st+'</span></div>';
+      }).join("");
     }).join("");
-  }).join("");
-  var pmEvents = (EVENTS||[]).filter(function(ev){ return ev.month===pmMo; }).map(function(ev){ return '<div class="plan-chip plan-chip-event" style="margin-top:6px">📌 '+esc(ev.title||"(제목 없음)")+(ev.note?' · '+esc(ev.note):'')+'</div>'; }).join("");
-  var monthPanel = '<div class="plan-month"><h3>📅 '+MONTH_NAMES[pmMo-1]+' 해야 할 업무 <span class="count tnum" style="font-weight:500;font-size:12.5px;color:var(--fg-muted)">'+pmCount+'건</span></h3>'+
-    (pmBody||'<div class="hint">이 달에 예정된 업무가 없습니다.</div>')+pmEvents+'</div>';
+    var pmEvents = (EVENTS||[]).filter(function(ev){ return ev.month===pmMo; }).map(function(ev){ return '<div class="plan-chip plan-chip-event" style="margin-top:6px">📌 '+esc(ev.title||"(제목 없음)")+(ev.note?' · '+esc(ev.note):'')+'</div>'; }).join("");
+    return '<h3 style="display:flex;align-items:center;gap:8px"><button type="button" class="btn btn-sm" data-pm-step="-1" aria-label="이전 달">◀</button><span style="flex:1;text-align:center">📅 '+MONTH_NAMES[pmMo-1]+' 해야 할 업무 <span class="count tnum" style="font-weight:500;font-size:12.5px;color:var(--fg-muted)">'+pmCount+'건</span></span><button type="button" class="btn btn-sm" data-pm-step="1" aria-label="다음 달">▶</button></h3>'+
+      '<div style="overflow:auto;flex:1;min-height:0">'+(pmBody||'<div class="hint">이 달에 예정된 업무가 없습니다.</div>')+pmEvents+'</div>'+
+      '<button type="button" class="btn" id="pm-close" style="margin-top:12px;width:100%;justify-content:center">닫기</button>';
+  }
+  function openMonthPopup(mo){
+    planMobMonth = mo;
+    var old = document.getElementById("pm-overlay"); if(old) old.remove();
+    var ov = document.createElement("div"); ov.className = "log-overlay"; ov.id = "pm-overlay";
+    ov.innerHTML = '<div class="log-panel plan-month-pop" style="max-width:680px;max-height:86vh;display:flex;flex-direction:column"></div>';
+    document.body.appendChild(ov);
+    var panel = ov.firstChild;
+    function close(){ ov.remove(); document.removeEventListener("keydown", onKey); renderPlan(); }
+    function onKey(e){ if(e.key==="Escape") close(); }
+    function fill(){
+      panel.innerHTML = monthListHtml(planMobMonth);
+      panel.querySelectorAll("[data-pm-step]").forEach(function(b){ b.addEventListener("click", function(){ planMobMonth = ((planMobMonth-1+parseInt(b.getAttribute("data-pm-step"),10)+12)%12)+1; fill(); }); });
+      panel.querySelectorAll("[data-goto-card]").forEach(function(el){ el.addEventListener("click", function(){ var id = el.getAttribute("data-goto-card"); ov.remove(); document.removeEventListener("keydown", onKey); location.hash = "card/"+encodeURIComponent(id); }); });
+      document.getElementById("pm-close").addEventListener("click", close);
+    }
+    fill();
+    ov.addEventListener("click", function(e){ if(e.target===ov) close(); });
+    document.addEventListener("keydown", onKey);
+  }
   var mchips = '<div class="plan-mchips m-only">'+MONTH_NAMES.map(function(mn,i){
     return '<button type="button" data-mm="'+(i+1)+'" class="'+((i+1)===planMobMonth?'sel':'')+((i+1)===(new Date().getMonth()+1)?' cur':'')+'">'+mn+'</button>';
   }).join("")+'</div>';
@@ -2184,7 +2206,6 @@ function renderPlan(){
       '</div>'+
     '</div>'+
     '<div class="gutter">'+
-      monthPanel+
       '<div class="table-wrap plan-wrap"><div class="plan-grid">'+header+rowsHtml+'</div></div>'+
       unschedHtml+
       '<div style="margin-top:22px">'+
@@ -2197,14 +2218,13 @@ function renderPlan(){
 
   wireNavBar(app);
   syncTopbarH();
-  if(planScrollMonth){ planScrollMonth = false; var pmEl = app.querySelector(".plan-month"); if(pmEl && pmEl.scrollIntoView) pmEl.scrollIntoView({block:"start"}); }
   var selChip = app.querySelector("[data-mm].sel");
   if(selChip && selChip.scrollIntoView){ try{ var strip = selChip.parentNode; strip.scrollLeft = Math.max(0, selChip.offsetLeft - 60); }catch(e){} }
   app.querySelectorAll("[data-mm]").forEach(function(b){
-    b.addEventListener("click", function(){ planMobMonth = parseInt(b.getAttribute("data-mm"),10); planScrollMonth = true; renderPlan(); });
+    b.addEventListener("click", function(){ openMonthPopup(parseInt(b.getAttribute("data-mm"),10)); });
   });
   app.querySelectorAll("[data-ph-m]").forEach(function(h){
-    h.addEventListener("click", function(){ planMobMonth = parseInt(h.getAttribute("data-ph-m"),10); planScrollMonth = true; renderPlan(); });
+    h.addEventListener("click", function(){ openMonthPopup(parseInt(h.getAttribute("data-ph-m"),10)); });
   });
   var pickBtn = document.getElementById("btn-plan-pick");
   if(pickBtn) pickBtn.addEventListener("click", function(){ openPlanPicker(); });
