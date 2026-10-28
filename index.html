@@ -287,6 +287,7 @@ body.intro table.toc tbody tr:nth-child(8){animation-delay:.35s}body.intro table
 
 /* 선택 출력 / 모아찍기 */
 #print-batch{display:none}
+#btn-print-mode.active{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .selbox{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 .selbox input,.selall input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
 .selall{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
@@ -1403,6 +1404,7 @@ function openMoreSheet(){
     item("sync","🔄","동기화 · 백업", remind ? '⚠ 동기화가 필요합니다 (고친 카드 '+si.changed+'개)' : '다른 컴퓨터와 합치기, 백업·복원')+
     item("trash","🗑","휴지통", trashCount?(trashCount+'개 보관 중'):'삭제한 카드 복구')+
     item("export","📊","엑셀로 내보내기","업무카드 전체를 .xlsx로 저장")+
+    item("print","🖨","출력 / PDF","카드를 골라 인쇄·PDF 저장(모아찍기)")+
     item("help","❓","도움말","")+
     '<button class="btn" id="more-close" style="margin-top:10px;width:100%;justify-content:center">닫기</button></div>';
   document.body.appendChild(ov);
@@ -1416,6 +1418,7 @@ function openMoreSheet(){
       else if(id==="trash") location.hash = "trash";
       else if(id==="sync") openBackupModal();
       else if(id==="export") exportCSV();
+      else if(id==="print") togglePrintMode(true);
       else if(id==="help") openHelpModal("usage");
     });
   });
@@ -1458,6 +1461,7 @@ function navBarHtml(active){
     '<button type="button" class="btn btn-sm" id="help-btn" title="도움말">❓ 도움말</button>'+
     '<button type="button" class="btn btn-sm" id="backup-btn" title="백업 / 복원">💾 백업</button>'+
     '<button type="button" class="btn btn-sm" id="btn-export" title="업무카드 상세 내용 전체를 포함한 엑셀 파일(.xlsx)로 내보냅니다. 자동 필터가 켜진 상태로 저장됩니다.">📊 엑셀</button>'+
+    '<button type="button" class="btn btn-sm'+(selectMode?' active':'')+'" id="btn-print-mode" title="업무카드를 골라 인쇄하거나 PDF로 저장합니다(모아찍기 가능)">🖨 출력/PDF</button>'+
     '<span style="flex:1"></span>'+
     '<a class="btn btn-sm" href="#trash">🗑 휴지통'+(trashCount?(' ('+trashCount+')'):'')+'</a>'+
     '<a class="btn btn-sm btn-primary" href="#card/new">+ 새 카드</a>'+
@@ -1486,6 +1490,8 @@ function wireNavBar(root){
   if(bkBtn) bkBtn.addEventListener("click", function(){ openBackupModal(); });
   var xBtn = (root||document).querySelector("#btn-export");
   if(xBtn) xBtn.addEventListener("click", exportCSV);
+  var pmBtn = (root||document).querySelector("#btn-print-mode");
+  if(pmBtn) pmBtn.addEventListener("click", function(){ togglePrintMode(); });
 }
 
 /* ---------- help modal ---------- */
@@ -1690,6 +1696,13 @@ function snippetHtml(r){
 }
 /* ---------- 선택 출력 · 모아찍기 ---------- */
 var selIds = {};
+var selectMode = false;
+function togglePrintMode(force){
+  selectMode = (typeof force==="boolean") ? force : !selectMode;
+  if(!selectMode) selIds = {};
+  if(location.hash.replace(/^#\/?/,"")!=="toc" && location.hash!=="" ){ location.hash = "toc"; if(!selectMode) route(); return; }
+  route();
+}
 var batchLayout = "1";
 function cardsInSeqOrder(ids){
   var set = {}; ids.forEach(function(i){ set[i]=1; });
@@ -1764,7 +1777,7 @@ function updateResults(){
     var kColor = KPI_COLORS[r.kpi]||"#ddd";
     var stars = "★★★★★☆☆☆☆☆".slice(5-(r.importance||0),10-(r.importance||0));
     return '<tr tabindex="0" data-id="'+esc(r.id)+'"'+(selIds[r.id]?' class="sel-on"':'')+'>'+
-      '<td class="cell-no tnum"><label class="selbox" title="출력할 카드 선택"><input type="checkbox" data-sel="'+esc(r.id)+'"'+(selIds[r.id]?' checked':'')+' aria-label="선택"> '+esc(r.no)+'</label></td>'+
+      '<td class="cell-no tnum">'+(selectMode?'<label class="selbox" title="출력할 카드 선택"><input type="checkbox" data-sel="'+esc(r.id)+'"'+(selIds[r.id]?' checked':'')+' aria-label="선택"> '+esc(r.no)+'</label>':esc(r.no))+'</td>'+
       '<td>'+esc((r.category||"").replace(/^.*?\.\s*/,""))+'</td>'+
       '<td class="cell-title">'+esc(r.title)+titleBadgeFor(r)+snippetHtml(r)+'</td>'+
       '<td>'+esc(r.owner)+'</td>'+
@@ -1775,9 +1788,10 @@ function updateResults(){
   }).join("");
 
   var html = '<div class="resultbar"><span class="tnum">'+rows.length+'개 표시 중 (전체 '+total+'건)</span>'+
-    (rows.length?'<span class="spacer"></span><label class="selall"><input type="checkbox" id="sel-all"> 표시된 카드 모두 선택</label>':'<span class="spacer"></span>')+
-    '<span class="tnum" id="sel-count"></span>'+
-    '<button type="button" class="btn btn-sm btn-primary" id="btn-batch-print" title="선택한 카드·표시된 카드·전체 카드를 한꺼번에 인쇄하거나 PDF로 저장합니다(모아찍기 가능)">🖨 출력</button></div>'+
+    (selectMode?('<span class="spacer"></span>'+(rows.length?'<label class="selall"><input type="checkbox" id="sel-all"> 표시된 카드 모두 선택</label>':'')+
+      '<span class="tnum" id="sel-count"></span>'+
+      '<button type="button" class="btn btn-sm btn-primary" id="btn-batch-print" title="선택한 카드·표시된 카드·전체 카드를 한꺼번에 인쇄하거나 PDF로 저장합니다(모아찍기 가능)">🖨 출력 설정</button>'+
+      '<button type="button" class="btn btn-sm" id="btn-print-exit">✕ 선택 종료</button>'):'')+'</div>'+
     (rows.length?
       '<div class="table-wrap"><table class="toc"><thead><tr>'+
         th("seq","No.")+th("category","분류")+th("title","업무명")+th("owner","담당자")+th("importance","중요도")+th("period","주기")+th("kpi","성과지표")+
@@ -1820,6 +1834,8 @@ function updateResults(){
   });
   var bp = document.getElementById("btn-batch-print");
   if(bp) bp.addEventListener("click", function(){ openBatchPrintDialog(shownIds); });
+  var bx = document.getElementById("btn-print-exit");
+  if(bx) bx.addEventListener("click", function(){ togglePrintMode(false); });
   refreshSel();
   container.querySelectorAll("table.toc tbody tr").forEach(function(tr){
     function go(){ location.hash = "card/"+encodeURIComponent(tr.getAttribute("data-id")); }
