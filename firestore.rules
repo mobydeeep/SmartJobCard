@@ -1,16 +1,44 @@
 rules_version = '2';
-// Firebase 콘솔 > Firestore Database > 규칙 에 붙여 넣고 [게시]하세요.
-// 아래 이메일을 본인 구글 계정으로 바꾸세요(여러 명이면 쉼표로 추가). 이 계정만 읽고 쓸 수 있습니다.
+// Firebase 콘솔 > Firestore Database > 규칙 에 전체를 붙여 넣고 [게시]하세요.
+// 최고 관리자: 아래 ADMIN_EMAIL@gmail.com 한 곳만 본인 구글 계정으로 되어 있습니다(제거 불가).
+// 그 외 권한은 앱의 "사용자·권한 관리" 화면에서 부여/제거합니다.
+//   access/{이메일}  = {role: 'view'(보기) | 'edit'(편집)}
+//   admins/{이메일}  = 관리자(권한 관리 + 모든 카드 편집)
 service cloud.firestore {
   match /databases/{database}/documents {
-    function allowed() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email in ['YOUR_EMAIL@gmail.com'];
+    function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function me() { return request.auth.token.email.lower(); }
+    function isSuper() { return signedIn() && me() == 'ADMIN_EMAIL@gmail.com'; }
+    function isAdmin() { return isSuper() || (signedIn() && exists(/databases/$(database)/documents/admins/$(me()))); }
+    function hasAccess() { return signedIn() && exists(/databases/$(database)/documents/access/$(me())); }
+    function canRead() { return isAdmin() || hasAccess(); }
+    function canWrite() { return isAdmin() || (hasAccess() && get(/databases/$(database)/documents/access/$(me())).data.role == 'edit'); }
+
+    match /cards/{id} {
+      allow read: if canRead();
+      allow create, update: if canWrite() && request.resource.data.json.size() < 900000;
+      allow delete: if canWrite();
     }
-    match /cards/{id}  { allow read: if allowed(); allow write: if allowed() && request.resource.data.json.size() < 900000; }
-    match /meta/{id}   { allow read, write: if allowed(); }
-    match /events/{id} { allow read, write: if allowed(); }
-    match /blobs/{id}  { allow read: if allowed(); allow write: if allowed() && request.resource.data.b64.size() < 950000; }
+    match /meta/{id}   { allow read: if canRead(); allow write: if canWrite(); }
+    match /events/{id} { allow read: if canRead(); allow write: if canWrite(); }
+    match /blobs/{id} {
+      allow read: if canRead();
+      allow create, update: if canWrite() && request.resource.data.b64.size() < 950000;
+      allow delete: if canWrite();
+    }
+
+    // 사용자 권한(보기/편집)
+    match /access/{email} {
+      allow get: if isAdmin() || (signedIn() && me() == email);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && email == email.lower() && request.resource.data.role in ['view', 'edit'];
+      allow delete: if isAdmin();
+    }
+    // 관리자 목록(최고 관리자는 여기에 없어도 항상 관리자이며 제거 불가)
+    match /admins/{email} {
+      allow get: if isAdmin() || (signedIn() && me() == email);
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin() && email == email.lower() && email != 'ADMIN_EMAIL@gmail.com';
+    }
   }
 }

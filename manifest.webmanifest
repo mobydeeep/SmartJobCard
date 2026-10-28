@@ -1,14 +1,18 @@
 {
+  "id": "./",
   "name": "Oscar System (오봉관리역 스마트잡 카드)",
   "short_name": "Oscar",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#F3F5F8",
+  "orientation": "any",
+  "background_color": "#1B3A63",
   "theme_color": "#1B3A63",
   "lang": "ko",
   "icons": [
     {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
   ]
 }
