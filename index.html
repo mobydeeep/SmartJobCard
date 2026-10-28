@@ -250,6 +250,41 @@ datalist{}
   .table-wrap{border:none}
 }
 
+/* ---- 열기 효과 (시작 화면 · 목차 등장 · 화면 전환) ---- */
+#splash{position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:radial-gradient(120% 90% at 50% 38%,#27508a 0%,#1B3A63 55%,#102640 100%);color:#fff;opacity:1;transition:opacity .45s ease;cursor:pointer}
+#splash.out{opacity:0;pointer-events:none}
+#splash svg{width:84px;height:84px;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35));animation:spPop .7s cubic-bezier(.2,.9,.3,1.2) both}
+#splash .sp-ring{stroke-dasharray:226;stroke-dashoffset:226;animation:spDraw .9s .15s ease forwards}
+#splash .sp-chk{stroke-dasharray:46;stroke-dashoffset:46;animation:spDraw .5s .75s ease forwards}
+#splash .sp-name{font-size:30px;font-weight:800;letter-spacing:-.015em;animation:spUp .6s .3s both}
+#splash .sp-sub{font-size:13.5px;letter-spacing:.04em;color:#cfe0f5;animation:spUp .6s .5s both}
+#splash .sp-sub b{color:#fff;font-weight:800;font-size:15px}
+#splash .sp-sub b:nth-of-type(1){animation:spGlow .5s .9s both}
+#splash .sp-sub b:nth-of-type(2){animation:spGlow .5s 1.05s both}
+#splash .sp-sub b:nth-of-type(3){animation:spGlow .5s 1.2s both}
+@keyframes spPop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+@keyframes spDraw{to{stroke-dashoffset:0}}
+@keyframes spUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes spGlow{from{color:#cfe0f5}to{color:#7fe0a0}}
+@keyframes introTop{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+@keyframes introRow{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes viewIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+body.intro .topbar{animation:introTop .5s ease both}
+body.intro table.toc tbody tr{animation:introRow .45s ease both}
+body.intro table.toc tbody tr:nth-child(2){animation-delay:.05s}body.intro table.toc tbody tr:nth-child(3){animation-delay:.1s}
+body.intro table.toc tbody tr:nth-child(4){animation-delay:.15s}body.intro table.toc tbody tr:nth-child(5){animation-delay:.2s}
+body.intro table.toc tbody tr:nth-child(6){animation-delay:.25s}body.intro table.toc tbody tr:nth-child(7){animation-delay:.3s}
+body.intro table.toc tbody tr:nth-child(8){animation-delay:.35s}body.intro table.toc tbody tr:nth-child(n+9){animation-delay:.4s}
+#app.view-in{animation:viewIn .25s ease both}
+.btn,.chip,select.filter{transition:background-color .15s,color .15s,border-color .15s,transform .08s,box-shadow .15s}
+.btn:active,.chip:active{transform:scale(.97)}
+@media (prefers-reduced-motion:reduce){
+  #splash{display:none!important}
+  body.intro .topbar,body.intro table.toc tbody tr,#app.view-in{animation:none!important}
+  .btn,.chip,select.filter{transition:none}
+}
+@media print{#splash{display:none!important}}
+
 /* 선택 출력 / 모아찍기 */
 #print-batch{display:none}
 .selbox{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
@@ -510,6 +545,14 @@ tr.sel-on{background:color-mix(in srgb,var(--accent) 9%,transparent)}
 </style>
 </head>
 <body>
+<div id="splash" aria-hidden="true"><svg viewBox="0 0 84 84" fill="none"><circle class="sp-ring" cx="42" cy="42" r="36" stroke="#fff" stroke-width="7" stroke-linecap="round" transform="rotate(-90 42 42)"/><path class="sp-chk" d="M27 43l10 10 20-22" stroke="#7fe0a0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="sp-name">Oscar System</div><div class="sp-sub"><b>오</b>봉관리역 <b>스</b>마트잡 <b>카</b>드</div></div>
+<script>(function(){var sp=document.getElementById("splash");if(!sp)return;var skip=false;
+try{if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches)skip=true;}catch(e){}
+var day=new Date().toDateString();try{if(localStorage.getItem("oscar_splash_day")===day)skip=true;else localStorage.setItem("oscar_splash_day",day);}catch(e){}
+function intro(){var b=document.body;b.classList.add("intro");setTimeout(function(){b.classList.remove("intro");},1500);}
+if(skip){sp.remove();intro();return;}
+var gone=false;function bye(){if(gone)return;gone=true;intro();sp.classList.add("out");setTimeout(function(){sp.remove();},500);}
+sp.addEventListener("click",bye);setTimeout(bye,1900);})();</script>
 <div id="app"></div>
 <nav id="tabbar" aria-label="주 메뉴"></nav>
 <div id="toast" class="save-toast"></div>
@@ -1378,7 +1421,8 @@ function route(){
   updateTabbar();
   window.scrollTo(0,0);
 }
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", function(){ route(); var a=document.getElementById("app"); if(a){ a.classList.remove("view-in"); void a.offsetWidth; a.classList.add("view-in"); } });
+
 
 function navBarHtml(active){
   var trashCount = (CARDS||[]).filter(function(c){return c.deleted;}).length;
