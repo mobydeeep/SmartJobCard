@@ -107,9 +107,9 @@ select.filter{padding:9px 10px;border:1px solid var(--border);border-radius:var(
 .resultbar{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--fg-muted);margin:12px 0 8px;flex-wrap:wrap}
 .resultbar .spacer{flex:1}
 
-.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.table-wrap{overflow-x:clip;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
 table.toc{width:100%;border-collapse:collapse;font-size:13.5px;min-width:760px}
-table.toc th{position:sticky;top:0;background:var(--accent);color:var(--accent-fg);text-align:left;padding:10px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;cursor:pointer;user-select:none;white-space:nowrap}
+table.toc th{position:sticky;top:var(--topbar-h,0px);z-index:5;background:var(--accent);color:var(--accent-fg);text-align:left;padding:10px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;cursor:pointer;user-select:none;white-space:nowrap}
 table.toc th .arrow{opacity:.6;font-size:10px;margin-left:3px}
 table.toc td{padding:9px 12px;border-top:1px solid var(--border);vertical-align:middle}
 table.toc tbody tr{cursor:pointer}
@@ -1534,6 +1534,11 @@ var mobileFiltersOpen = false;
 function mobileFilterCount(){
   return ["period","kpi","owner","dept","law"].filter(function(k){ return state[k] && state[k]!=="전체"; }).length;
 }
+function syncTopbarH(){
+  var t = document.querySelector("#app .topbar");
+  document.documentElement.style.setProperty("--topbar-h", (t ? t.offsetHeight-1 : 0)+"px");
+}
+window.addEventListener("resize", syncTopbarH);
 function renderTOC(){
   var app = document.getElementById("app");
   var catChips = ["전체"].concat(VOCAB.categories).map(function(c){
@@ -1586,6 +1591,7 @@ function renderTOC(){
 
   updateResults();
   wireNavBar(app);
+  syncTopbarH();
 
   document.getElementById("q").addEventListener("input", function(e){ state.q=e.target.value; updateResults(); });
   document.getElementById("f-period").addEventListener("change", function(e){ state.period=e.target.value; updateResults(); });
