@@ -250,6 +250,28 @@ datalist{}
   .table-wrap{border:none}
 }
 
+/* 선택 출력 / 모아찍기 */
+#print-batch{display:none}
+.selbox{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.selbox input,.selall input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.selall{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+tr.sel-on{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.pb-opt{display:flex;gap:8px;align-items:flex-start;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;cursor:pointer;font-size:13.5px}
+.pb-opt input{margin-top:3px;accent-color:var(--accent)}
+.pb-opt small{display:block;color:var(--fg-muted);font-size:12px;margin-top:2px}
+.pb-opt.dis{opacity:.45;cursor:not-allowed}
+.pb-h{font-size:12.5px;font-weight:700;margin:12px 0 6px;color:var(--fg-muted)}
+@media print{
+  body.batch-printing > *:not(#print-batch){display:none !important}
+  body.batch-printing #print-batch{display:block !important}
+  #print-batch .pb-page{break-after:page}
+  #print-batch .pb-page:last-child{break-after:auto}
+  .pb-2 .pb-page,.pb-4 .pb-page{display:grid;grid-template-columns:1fr 1fr;gap:5mm;align-items:start;break-inside:avoid}
+  .pb-2 .card-sheet{zoom:.72}
+  .pb-4 .card-sheet{zoom:.55}
+  #print-batch .card-sheet{margin:0}
+}
+
 /* view nav (업무카드 검색 / 연간업무계획) */
 .viewnav{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .search-row{margin-bottom:8px}
@@ -1592,6 +1614,69 @@ function snippetHtml(r){
   if(!m) return "";
   return '<div class="snip"><b>'+esc(m.label)+'</b> '+esc(m.pre)+'<mark>'+esc(m.hit)+'</mark>'+esc(m.post)+'</div>';
 }
+/* ---------- 선택 출력 · 모아찍기 ---------- */
+var selIds = {};
+var batchLayout = "1";
+function cardsInSeqOrder(ids){
+  var set = {}; ids.forEach(function(i){ set[i]=1; });
+  return allRows().filter(function(c){ return set[c.id]; }).sort(function(a,b){ return (a.seq||0)-(b.seq||0); }).map(function(c){ return c.id; });
+}
+function openBatchPrintDialog(shownIds){
+  var old = document.getElementById("pb-overlay"); if(old) old.remove();
+  var selList = cardsInSeqOrder(Object.keys(selIds));
+  var allList = allRows().map(function(c){return c.id;});
+  var scope = selList.length ? "sel" : "shown";
+  var ov = document.createElement("div"); ov.className = "log-overlay"; ov.id = "pb-overlay";
+  function opt(name,val,checked,label,sub,dis){ return '<label class="pb-opt'+(dis?' dis':'')+'"><input type="radio" name="'+name+'" value="'+val+'"'+(checked?' checked':'')+(dis?' disabled':'')+'><span>'+label+(sub?'<small>'+sub+'</small>':'')+'</span></label>'; }
+  ov.innerHTML = '<div class="log-panel"><h3>🖨 업무카드 출력</h3>'+
+    '<div class="pb-h">출력할 카드</div>'+
+    opt("pb-scope","sel",scope==="sel","선택한 카드 ("+selList.length+"장)",selList.length?"":"목차에서 카드 앞 체크박스로 선택하세요",!selList.length)+
+    opt("pb-scope","shown",scope==="shown","지금 표시된 카드 ("+shownIds.length+"장)","현재 검색·필터 결과 전부",!shownIds.length)+
+    opt("pb-scope","all",false,"전체 업무카드 ("+allList.length+"장)","삭제된 카드는 제외")+
+    '<div class="pb-h">배치</div>'+
+    opt("pb-layout","1",batchLayout==="1","한 장에 카드 1개","A4 세로 · 카드마다 새 페이지")+
+    opt("pb-layout","2",batchLayout==="2","모아찍기 2개","A4 가로 · 좌우로 2개씩(글자 약 70%)")+
+    opt("pb-layout","4",batchLayout==="4","모아찍기 4개","A4 세로 · 2×2로 4개씩(글자 약 55%, 작아서 읽기 어려울 수 있음)")+
+    '<div style="display:flex;gap:8px;margin-top:12px"><button type="button" class="btn" id="pb-cancel" style="flex:1;justify-content:center">취소</button><button type="button" class="btn btn-primary" id="pb-go" style="flex:2;justify-content:center">출력 / PDF 저장</button></div>'+
+    '<p style="font-size:12px;color:var(--fg-muted);margin-top:10px">인쇄 창에서 용지는 A4, 배율은 100%(기본), 여백은 기본으로 두세요. 프린터 대신 "PDF로 저장"도 선택할 수 있습니다.</p></div>';
+  document.body.appendChild(ov);
+  function close(){ ov.remove(); }
+  ov.addEventListener("click", function(e){ if(e.target===ov) close(); });
+  document.getElementById("pb-cancel").addEventListener("click", close);
+  document.getElementById("pb-go").addEventListener("click", function(){
+    var sc = (ov.querySelector('input[name="pb-scope"]:checked')||{}).value;
+    var lay = (ov.querySelector('input[name="pb-layout"]:checked')||{}).value || "1";
+    var ids = sc==="sel" ? selList : sc==="all" ? allList : cardsInSeqOrder(shownIds);
+    batchLayout = lay;
+    if(!ids.length){ showToast("출력할 카드가 없습니다"); return; }
+    close();
+    doBatchPrint(ids, lay);
+  });
+}
+function doBatchPrint(ids, layout){
+  var app = document.getElementById("app");
+  var sheets = [], saved = {e:editMode, d:draft, l:logPanelOpen, a:deleteArmed};
+  batchRendering = true; editMode = false; draft = null; logPanelOpen = false; deleteArmed = false;
+  try{
+    ids.forEach(function(id){
+      try{ renderCardShell(id, false); var sh = app.querySelector(".card-sheet"); if(sh) sheets.push(sh.outerHTML); }catch(e){}
+    });
+  } finally {
+    batchRendering = false; editMode = saved.e; draft = saved.d; logPanelOpen = saved.l; deleteArmed = saved.a;
+  }
+  route();   // 목차 화면 복원
+  var per = layout==="2" ? 2 : layout==="4" ? 4 : 1, pages = "";
+  for(var i=0;i<sheets.length;i+=per) pages += '<div class="pb-page">'+sheets.slice(i,i+per).join("")+'</div>';
+  var host = document.createElement("div"); host.id = "print-batch"; host.className = "pb-"+layout; host.innerHTML = pages;
+  var st = document.createElement("style"); st.id = "pb-style";
+  st.textContent = "@media print{@page{size:A4 "+(layout==="2"?"landscape":"portrait")+";margin:"+(layout==="1"?"12mm":"8mm")+"}}";
+  document.head.appendChild(st); document.body.appendChild(host); document.body.classList.add("batch-printing");
+  var done = false;
+  function cleanup(){ if(done) return; done = true; window.removeEventListener("afterprint", cleanup); host.remove(); st.remove(); document.body.classList.remove("batch-printing"); }
+  window.addEventListener("afterprint", cleanup);
+  setTimeout(function(){ try{ window.print(); }catch(e){ cleanup(); } }, 150);
+  setTimeout(cleanup, 300000);
+}
 function updateResults(){
   syncFilterActive();
   var rows = filteredRows();
@@ -1604,8 +1689,8 @@ function updateResults(){
     var pColor = PERIOD_COLORS[r.period]||"#ddd";
     var kColor = KPI_COLORS[r.kpi]||"#ddd";
     var stars = "★★★★★☆☆☆☆☆".slice(5-(r.importance||0),10-(r.importance||0));
-    return '<tr tabindex="0" data-id="'+esc(r.id)+'">'+
-      '<td class="cell-no tnum">'+esc(r.no)+'</td>'+
+    return '<tr tabindex="0" data-id="'+esc(r.id)+'"'+(selIds[r.id]?' class="sel-on"':'')+'>'+
+      '<td class="cell-no tnum"><label class="selbox" title="출력할 카드 선택"><input type="checkbox" data-sel="'+esc(r.id)+'"'+(selIds[r.id]?' checked':'')+' aria-label="선택"> '+esc(r.no)+'</label></td>'+
       '<td>'+esc((r.category||"").replace(/^.*?\.\s*/,""))+'</td>'+
       '<td class="cell-title">'+esc(r.title)+titleBadgeFor(r)+snippetHtml(r)+'</td>'+
       '<td>'+esc(r.owner)+'</td>'+
@@ -1615,7 +1700,10 @@ function updateResults(){
       '</tr>';
   }).join("");
 
-  var html = '<div class="resultbar"><span class="tnum">'+rows.length+'개 표시 중 (전체 '+total+'건)</span></div>'+
+  var html = '<div class="resultbar"><span class="tnum">'+rows.length+'개 표시 중 (전체 '+total+'건)</span>'+
+    (rows.length?'<span class="spacer"></span><label class="selall"><input type="checkbox" id="sel-all"> 표시된 카드 모두 선택</label>':'<span class="spacer"></span>')+
+    '<span class="tnum" id="sel-count"></span>'+
+    '<button type="button" class="btn btn-sm btn-primary" id="btn-batch-print" title="선택한 카드·표시된 카드·전체 카드를 한꺼번에 인쇄하거나 PDF로 저장합니다(모아찍기 가능)">🖨 출력</button></div>'+
     (rows.length?
       '<div class="table-wrap"><table class="toc"><thead><tr>'+
         th("seq","No.")+th("category","분류")+th("title","업무명")+th("owner","담당자")+th("importance","중요도")+th("period","주기")+th("kpi","성과지표")+
@@ -1633,6 +1721,32 @@ function updateResults(){
       updateResults();
     });
   });
+  var shownIds = rows.map(function(r){return r.id;});
+  function refreshSel(){
+    var n = Object.keys(selIds).length;
+    var sc = document.getElementById("sel-count"); if(sc) sc.textContent = n ? ("☑ "+n+"개 선택됨") : "";
+    var sa = document.getElementById("sel-all");
+    if(sa){ var c = shownIds.filter(function(i){return selIds[i];}).length; sa.checked = c>0 && c===shownIds.length; sa.indeterminate = c>0 && c<shownIds.length; }
+  }
+  container.querySelectorAll("input[data-sel]").forEach(function(cb){
+    cb.addEventListener("click", function(e){ e.stopPropagation(); });
+    cb.parentNode.addEventListener("click", function(e){ e.stopPropagation(); });
+    cb.addEventListener("change", function(){
+      var id = cb.getAttribute("data-sel");
+      if(cb.checked) selIds[id]=1; else delete selIds[id];
+      var tr = cb.closest("tr"); if(tr) tr.classList.toggle("sel-on", cb.checked);
+      refreshSel();
+    });
+  });
+  var selAll = document.getElementById("sel-all");
+  if(selAll) selAll.addEventListener("change", function(){
+    shownIds.forEach(function(i){ if(selAll.checked) selIds[i]=1; else delete selIds[i]; });
+    container.querySelectorAll("input[data-sel]").forEach(function(cb){ cb.checked = selAll.checked; var tr=cb.closest("tr"); if(tr) tr.classList.toggle("sel-on", selAll.checked); });
+    refreshSel();
+  });
+  var bp = document.getElementById("btn-batch-print");
+  if(bp) bp.addEventListener("click", function(){ openBatchPrintDialog(shownIds); });
+  refreshSel();
   container.querySelectorAll("table.toc tbody tr").forEach(function(tr){
     function go(){ location.hash = "card/"+encodeURIComponent(tr.getAttribute("data-id")); }
     tr.addEventListener("click", go);
@@ -2276,6 +2390,7 @@ function renderTrash(){
 }
 
 /* ---------- Card view ---------- */
+var batchRendering = false;
 var editMode = false;
 var draft = null;
 var logPanelOpen = false;
@@ -2578,7 +2693,7 @@ function renderCardShell(id, isNew){
     (logPanelOpen ? logOverlayHtml(card) : '')+
     '</div>';
 
-  wireCardEvents(id, isNew, card);
+  if(!batchRendering) wireCardEvents(id, isNew, card);
 }
 
 function logOverlayHtml(card){
