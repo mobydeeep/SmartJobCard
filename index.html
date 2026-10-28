@@ -1417,7 +1417,7 @@ function openMoreSheet(){
       if(id==="new") location.hash = "card/new";
       else if(id==="trash") location.hash = "trash";
       else if(id==="sync") openBackupModal();
-      else if(id==="export") exportCSV();
+      else if(id==="export") askExport();
       else if(id==="print") togglePrintMode(true);
       else if(id==="help") openHelpModal("usage");
     });
@@ -1489,7 +1489,7 @@ function wireNavBar(root){
   var bkBtn = (root||document).querySelector("#backup-btn");
   if(bkBtn) bkBtn.addEventListener("click", function(){ openBackupModal(); });
   var xBtn = (root||document).querySelector("#btn-export");
-  if(xBtn) xBtn.addEventListener("click", exportCSV);
+  if(xBtn) xBtn.addEventListener("click", askExport);
   var pmBtn = (root||document).querySelector("#btn-print-mode");
   if(pmBtn) pmBtn.addEventListener("click", function(){ togglePrintMode(); });
 }
@@ -1969,6 +1969,20 @@ function buildXlsxBlob(headers, rows){
     {name:"xl/worksheets/sheet1.xml", bytes: enc.encode(sheetXml)}
   ];
   return buildZipBlob(files);
+}
+function askExport(){
+  var old = document.getElementById("xl-overlay"); if(old) old.remove();
+  var ov = document.createElement("div"); ov.className = "log-overlay"; ov.id = "xl-overlay";
+  ov.innerHTML = '<div class="log-panel" style="max-width:380px;text-align:center"><h3 style="font-size:16px">📊 엑셀 다운로드</h3>'+
+    '<p style="font-size:14px;margin:8px 0 16px;line-height:1.6">업무카드 전체 내용을 엑셀 파일(.xlsx)로 다운로드하시겠습니까?</p>'+
+    '<div style="display:flex;gap:8px"><button type="button" class="btn" id="xl-no" style="flex:1;justify-content:center">취소</button><button type="button" class="btn btn-primary" id="xl-yes" style="flex:1;justify-content:center">다운로드</button></div></div>';
+  document.body.appendChild(ov);
+  function close(){ ov.remove(); document.removeEventListener("keydown", onKey); }
+  function onKey(e){ if(e.key==="Escape") close(); }
+  document.addEventListener("keydown", onKey);
+  ov.addEventListener("click", function(e){ if(e.target===ov) close(); });
+  document.getElementById("xl-no").addEventListener("click", close);
+  document.getElementById("xl-yes").addEventListener("click", function(){ close(); exportCSV(); });
 }
 function exportCSV(){
   var rows = filteredRows();
@@ -3307,8 +3321,8 @@ function cloudSetStatus(st, msg){
   var map = {sync:["☁ 동기화 중…",""], ok:["☁ 온라인 저장됨","ok"], wait:["☁ 대기 중 (연결 확인)","warn"], error:["⚠ 클라우드 오류","bad"], login:["☁ 로그인 필요","warn"], local:["☁ 이 기기에서만 저장","warn"]};
   var m = map[st] || map.sync;
   var label = m[0];
-  if(st==="ok" && cloud.role==="view") label = "☁ 보기 전용";
-  else if(st==="ok" && cloud.isAdmin) label = "☁ 온라인 저장됨 · 관리자";
+  if(st==="ok" && cloud.role==="view") label = cloud.user ? "☁ 보기 전용 (편집 권한 없음)" : "☁ 보기 전용 · 로그인하면 편집";
+  else if(st==="ok" && cloud.isAdmin) label = "☁ 온라인 저장됨 · 관리자"+(cloud.reqCount?" · 요청 "+cloud.reqCount+"건":"");
   el.className = m[1]; el.textContent = label; el.title = cloud.msg || "";
 }
 function cloudShowLogin(msg){
@@ -3319,10 +3333,10 @@ function cloudShowLogin(msg){
   }
   o.style.alignItems = "center";
   o.innerHTML = '<div class="log-panel" style="max-width:380px;text-align:center"><h3 style="font-size:17px">☁ <span class="brand-name">Oscar System</span> <small style="font-size:12px;font-weight:400;color:var(--fg-muted)">(<b style="font-weight:700">오</b>봉관리역 <b style="font-weight:700">스</b>마트잡 <b style="font-weight:700">카</b>드)</small></h3>'+
-    '<p style="color:var(--fg-muted);font-size:13.5px;margin:8px 0 14px">로그인하면 컴퓨터·핸드폰 어디서든 같은 업무카드를 보고 고칠 수 있습니다.</p>'+
+    '<p style="color:var(--fg-muted);font-size:13.5px;margin:8px 0 14px">편집 권한이 있는 구글 계정으로 로그인하면 업무카드를 고칠 수 있습니다. 로그인하지 않아도 업무카드는 볼 수 있습니다(보기 전용).</p>'+
     (msg?'<div class="note" style="margin-bottom:10px">'+esc(msg)+'</div>':'')+
     '<button type="button" class="btn btn-primary" id="cloud-signin" style="width:100%;justify-content:center">구글 계정으로 로그인</button>'+
-    '<button type="button" class="btn btn-ghost" id="cloud-skip" style="width:100%;justify-content:center;margin-top:8px;font-size:12.5px">로그인 없이 이 기기에서만 사용</button></div>';
+    '<button type="button" class="btn btn-ghost" id="cloud-skip" style="width:100%;justify-content:center;margin-top:8px;font-size:12.5px">닫기 (로그인 없이 보기)</button></div>';
   document.getElementById("cloud-signin").addEventListener("click", function(){
     var prov = new firebase.auth.GoogleAuthProvider();
     cloud.auth.signInWithPopup(prov).catch(function(e){
@@ -3331,24 +3345,41 @@ function cloudShowLogin(msg){
       cloudShowLogin("로그인에 실패했습니다: "+((e&&e.code)||"알 수 없는 오류"));
     });
   });
-  document.getElementById("cloud-skip").addEventListener("click", function(){ cloud.localOnly = true; cloudHideLogin(); cloudSetStatus("local"); });
+  document.getElementById("cloud-skip").addEventListener("click", function(){ cloudHideLogin(); if(!cloud.ready && !cloud.user){ cloud.localOnly = true; cloudSetStatus("local"); } });
 }
 function cloudHideLogin(){ var o = document.getElementById("cloud-login"); if(o) o.remove(); }
 function openCloudMenu(){
   var old = document.getElementById("cloud-menu"); if(old) old.remove();
   var o = document.createElement("div"); o.id = "cloud-menu"; o.className = "log-overlay";
   var who = cloud.user ? esc(cloud.user.email||"") : "로그인 안 됨";
-  o.innerHTML = '<div class="log-panel"><h3>☁ 온라인 저장</h3><p style="font-size:13.5px">계정: <b>'+who+'</b>'+(cloud.role?' <span class="badge">'+(cloud.isAdmin?'관리자':cloud.role==="edit"?'보기·편집':cloud.role==="view"?'보기 전용':'권한 없음')+'</span>':'')+'<br><span style="color:var(--fg-muted)">상태: '+esc((document.getElementById("cloud-badge")||{}).textContent||"")+'</span></p>'+
+  o.innerHTML = '<div class="log-panel"><h3>☁ 온라인 저장</h3><p style="font-size:13.5px">계정: <b>'+who+'</b>'+(cloud.role?' <span class="badge">'+(cloud.isAdmin?'관리자':cloud.role==="edit"?'편집':'보기 전용')+'</span>':'')+'<br><span style="color:var(--fg-muted)">상태: '+esc((document.getElementById("cloud-badge")||{}).textContent||"")+'</span></p>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+
-    (cloud.isAdmin?'<button class="btn btn-sm btn-primary" id="cm-admin">👥 사용자·권한 관리</button>':'')+(cloud.user?'<button class="btn btn-sm btn-primary" id="cm-resync">지금 다시 동기화</button><button class="btn btn-sm btn-danger" id="cm-logout">로그아웃</button>':'<button class="btn btn-sm btn-primary" id="cm-login">로그인</button>')+
+    (cloud.isAdmin?'<button class="btn btn-sm btn-primary" id="cm-admin">👥 사용자·권한 관리'+(cloud.reqCount?' <span class="nav-count">'+cloud.reqCount+'</span>':'')+'</button>':'')+(cloud.user && cloud.role==="view"?'<button class="btn btn-sm btn-primary" id="cm-request">✋ 편집 권한 요청</button>':'')+(cloud.user?'<button class="btn btn-sm btn-primary" id="cm-resync">지금 다시 동기화</button><button class="btn btn-sm btn-danger" id="cm-logout">로그아웃</button>':'<button class="btn btn-sm btn-primary" id="cm-login">로그인</button>')+
     '<button class="btn btn-sm" id="cm-close">닫기</button></div></div>';
   document.body.appendChild(o);
   o.addEventListener("click", function(e){ if(e.target===o) o.remove(); });
   document.getElementById("cm-close").addEventListener("click", function(){ o.remove(); });
   var r = document.getElementById("cm-resync"); if(r) r.addEventListener("click", function(){ o.remove(); cloudStart().catch(cloudFail); });
   var lo = document.getElementById("cm-logout"); if(lo) lo.addEventListener("click", function(){ o.remove(); cloud.auth.signOut(); });
+  var rq = document.getElementById("cm-request"); if(rq) rq.addEventListener("click", function(){ o.remove(); cloudRequestEdit(); });
   var ad = document.getElementById("cm-admin"); if(ad) ad.addEventListener("click", function(){ o.remove(); openAdminPanel(); });
   var li = document.getElementById("cm-login"); if(li) li.addEventListener("click", function(){ o.remove(); cloudShowLogin(); });
+}
+async function cloudRequestEdit(){
+  if(!cloud.user || cloud.role!=="view") return;
+  var em = String(cloud.user.email||"").toLowerCase(), ref = cloud.db.collection("requests").doc(em);
+  try{
+    var d = await ref.get();
+    if(d.exists){ showToast("이미 편집 권한을 요청했습니다. 관리자가 승인하면 다시 로그인(또는 새로고침)해 주세요."); return; }
+    await ref.set({email:em, name:String(cloud.user.displayName||""), at:new Date().toISOString()});
+    showToast("관리자에게 편집 권한을 요청했습니다. 승인되면 새로고침해 주세요.");
+  }catch(e){ showToast("요청에 실패했습니다: "+((e&&e.code)||(e&&e.message)||"오류")); }
+}
+async function cloudLoadReqCount(){
+  cloud.reqCount = 0;
+  if(!cloud.isAdmin) return;
+  try{ var r = await cloud.db.collection("requests").get(); r.forEach(function(){ cloud.reqCount++; }); }catch(e){}
+  cloudSetStatus(cloud.status, cloud.msg);
 }
 async function openAdminPanel(){
   if(!cloud.isAdmin) return;
@@ -3364,17 +3395,24 @@ async function openAdminPanel(){
   function row(email, right){ return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="flex:1;min-width:0;overflow-wrap:anywhere">'+esc(email)+'</span>'+right+'</div>'; }
   async function load(){
     var body = document.getElementById("adm-body"); if(!body) return;
-    var res = await Promise.all([db.collection("access").get(), db.collection("admins").get()]);
-    var acc = [], adm = [];
-    res[0].forEach(function(d){ acc.push({id:d.id, role:(d.data().role==="edit"?"edit":"view")}); });
+    var res = await Promise.all([db.collection("access").get(), db.collection("admins").get(), db.collection("requests").get()]);
+    var acc = [], adm = [], reqs = [];
+    res[2].forEach(function(d){ var x = d.data()||{}; reqs.push({id:d.id, name:x.name||"", at:x.at||""}); });
+    reqs.sort(function(a,b){ return a.at<b.at?-1:1; });
+    cloud.reqCount = reqs.length; cloudSetStatus(cloud.status, cloud.msg);
+    res[0].forEach(function(d){ acc.push({id:d.id, role:(d.data().role==="edit"?"edit":"legacy")}); });
     res[1].forEach(function(d){ adm.push(d.id); });
     acc.sort(function(a,b){ return a.id<b.id?-1:1; }); adm.sort();
-    var h = '<h4 style="margin:6px 0">업무카드 열람·편집 권한</h4>'+
-      '<div class="hint" style="margin-bottom:4px">여기에 등록한 구글 계정으로 로그인하면 업무카드를 볼 수 있습니다. <b>보기</b>는 읽기만, <b>편집</b>은 수정·추가·삭제까지 가능합니다.</div>'+
+    var h = '<h4 style="margin:6px 0">✋ 편집 권한 요청 ('+reqs.length+')</h4>'+
+      (reqs.length ? reqs.map(function(r){
+        return row(r.id+(r.name?' ('+r.name+')':''), '<span class="hint">'+esc((r.at||"").slice(0,10))+'</span><button class="btn btn-sm btn-primary" data-req-ok="'+esc(r.id)+'">승인</button><button class="btn btn-sm btn-danger" data-req-no="'+esc(r.id)+'">거절</button>');
+      }).join("") : '<div class="hint" style="padding:6px 0">들어온 요청이 없습니다.</div>')+
+      '<h4 style="margin:16px 0 6px">업무카드 편집 권한</h4>'+
+      '<div class="hint" style="margin-bottom:4px">업무카드는 <b>로그인하지 않아도 누구나 볼 수 있습니다</b>(보기 전용). 여기에 등록한 구글 계정으로 로그인하면 업무카드를 <b>편집(수정·추가·삭제)</b>할 수 있습니다.</div>'+
       (acc.length ? acc.map(function(a){
-        return row(a.id, '<select data-adm-role="'+esc(a.id)+'"><option value="view"'+(a.role==="view"?" selected":"")+'>보기</option><option value="edit"'+(a.role==="edit"?" selected":"")+'>편집</option></select><button class="btn btn-sm btn-danger" data-adm-del="'+esc(a.id)+'">권한 제거</button>');
-      }).join("") : '<div class="hint" style="padding:6px 0">부여된 계정이 없습니다.</div>')+
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input class="field" id="adm-email" type="email" placeholder="구글 이메일 (예: name@gmail.com)" style="flex:1;min-width:180px"><select id="adm-newrole"><option value="view">보기</option><option value="edit">편집</option></select><button class="btn btn-sm btn-primary" id="adm-add">권한 부여</button></div>'+
+        return row(a.id, (a.role==="edit" ? '<span class="badge">편집</span>' : '<span class="hint">(이전 \'보기\' 설정 · 편집 불가)</span>')+'<button class="btn btn-sm btn-danger" data-adm-del="'+esc(a.id)+'">권한 제거</button>');
+      }).join("") : '<div class="hint" style="padding:6px 0">편집 권한을 받은 계정이 없습니다.</div>')+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input class="field" id="adm-email" type="email" placeholder="구글 이메일 (예: name@gmail.com)" style="flex:1;min-width:180px"><button class="btn btn-sm btn-primary" id="adm-add">편집 권한 부여</button></div>'+
       '<h4 style="margin:16px 0 6px">관리자</h4>'+
       '<div class="hint" style="margin-bottom:4px">관리자는 이 화면에서 권한을 부여·제거할 수 있고, 모든 업무카드를 편집할 수 있습니다. 최고 관리자(보안 규칙에 지정된 계정)는 이 목록에 보이지 않으며 제거할 수 없습니다.</div>'+
       (adm.length ? adm.map(function(a){ return row(a, '<button class="btn btn-sm btn-danger" data-adm-rm="'+esc(a)+'">관리자 제거</button>'); }).join("") : '<div class="hint" style="padding:6px 0">추가로 지정된 관리자가 없습니다.</div>')+
@@ -3382,13 +3420,14 @@ async function openAdminPanel(){
     body.innerHTML = h;
     function guard(fn){ return function(){ fn().then(load).catch(function(e){ showToast("실패: "+((e&&e.code)||(e&&e.message)||"오류")); }); }; }
     var stamp = function(){ return {by:me, at:new Date().toISOString()}; };
-    body.querySelectorAll("[data-adm-role]").forEach(function(sel){ sel.addEventListener("change", guard(function(){ return db.collection("access").doc(sel.getAttribute("data-adm-role")).set(Object.assign({role:sel.value}, stamp())); })); });
+    body.querySelectorAll("[data-req-ok]").forEach(function(b){ b.addEventListener("click", guard(async function(){ var id = b.getAttribute("data-req-ok"); await db.collection("access").doc(id).set(Object.assign({role:"edit"}, stamp())); await db.collection("requests").doc(id).delete(); })); });
+    body.querySelectorAll("[data-req-no]").forEach(function(b){ b.addEventListener("click", guard(function(){ return db.collection("requests").doc(b.getAttribute("data-req-no")).delete(); })); });
     body.querySelectorAll("[data-adm-del]").forEach(function(b){ b.addEventListener("click", guard(function(){ return db.collection("access").doc(b.getAttribute("data-adm-del")).delete(); })); });
     body.querySelectorAll("[data-adm-rm]").forEach(function(b){ b.addEventListener("click", guard(function(){ return db.collection("admins").doc(b.getAttribute("data-adm-rm")).delete(); })); });
     document.getElementById("adm-add").addEventListener("click", function(){
       var em = document.getElementById("adm-email").value.trim().toLowerCase();
       if(!EMAIL.test(em)){ showToast("이메일 형식을 확인해 주세요"); return; }
-      guard(function(){ return db.collection("access").doc(em).set(Object.assign({role:document.getElementById("adm-newrole").value}, stamp())); })();
+      guard(function(){ return db.collection("access").doc(em).set(Object.assign({role:"edit"}, stamp())); })();
     });
     document.getElementById("adm-aadd").addEventListener("click", function(){
       var em = document.getElementById("adm-aemail").value.trim().toLowerCase();
@@ -3405,10 +3444,17 @@ function cloudInit(){
     firebase.initializeApp(CLOUD_CFG.firebaseConfig);
     cloud.auth = firebase.auth(); cloud.db = firebase.firestore();
   }catch(e){ cloud.on = false; return; }
-  cloudSetStatus("login");
+  cloudSetStatus("sync");
   cloud.auth.onAuthStateChanged(function(u){
     cloud.user = u || null;
-    if(!u){ cloud.role = ""; cloud.isAdmin = false; cloudApplyRole(); cloudStop(); cloudSetStatus("login"); if(!cloud.localOnly) cloudShowLogin(); return; }
+    if(!u){
+      cloud.role = "view"; cloud.isAdmin = false; cloudApplyRole(); cloudStop(); cloudSetStatus("sync");
+      if(cloud.localOnly) { cloudSetStatus("local"); return; }
+      cloudStart().catch(function(e){
+        if(cloudPermDenied(e)){ cloudSetStatus("login"); cloudShowLogin("공개 열람이 허용되어 있지 않습니다. 로그인해 주세요."); } else cloudFail(e);
+      });
+      return;
+    }
     var allowed = (CLOUD_CFG.allowed||[]).map(function(x){ return String(x).toLowerCase(); });
     if(allowed.length && allowed.indexOf(String(u.email||"").toLowerCase())===-1){
       cloud.auth.signOut(); cloudShowLogin("허용되지 않은 계정입니다: "+(u.email||"")); return;
@@ -3436,20 +3482,25 @@ function cloudRerender(){
 function cloudPermDenied(e){ return /permission/i.test((e && (e.code||e.message)) || ""); }
 async function cloudResolveRole(){
   var db = cloud.db, em = String((cloud.user && cloud.user.email) || "").toLowerCase();
-  cloud.role = "none"; cloud.isAdmin = false;
+  cloud.role = "view"; cloud.isAdmin = false;      // 기본은 보기 전용
+  if(!cloud.user) return;
   try{ await db.collection("admins").get(); cloud.role = "admin"; cloud.isAdmin = true; return; }
   catch(e){ if(!cloudPermDenied(e)) throw e; }
   try{
     var d = await db.collection("access").doc(em).get();
-    if(d.exists) cloud.role = (d.data().role==="edit") ? "edit" : "view";
+    if(d.exists && d.data().role==="edit"){ cloud.role = "edit"; return; }
   }catch(e){ if(!cloudPermDenied(e)) throw e; }
-  if(cloud.role==="none"){   // 예전 보안 규칙(이메일 목록 방식)을 쓰는 중이면 카드 읽기만 되는지 확인
-    try{ await db.collection("cards").limit(1).get(); cloud.role = "edit"; }catch(e){ if(!cloudPermDenied(e)) throw e; }
-  }
+  // 예전 보안 규칙(이메일 목록 방식)을 쓰는 중이면 쓰기가 되는 계정인지 확인
+  try{
+    var ref = db.collection("meta").doc("_probe");
+    await ref.set({t:Date.now()}); try{ await ref.delete(); }catch(e){}
+    cloud.role = "edit";
+  }catch(e){ if(!cloudPermDenied(e)) throw e; }
 }
 function cloudApplyRole(){
   document.body.classList.toggle("view-only", cloud.role==="view");
   canWrite = !!idb && cloud.role!=="view";
+  if(cloud.role==="view" && cloud.user && !cloud.noEditToast){ cloud.noEditToast = true; setTimeout(function(){ showToast("이 계정은 편집 권한이 없어 보기 전용입니다. 관리자에게 권한을 요청하세요."); }, 800); }
 }
 function cloudShowNoAccess(){
   var o = document.getElementById("cloud-noaccess");
@@ -3467,7 +3518,6 @@ async function cloudStart(){
   var db = cloud.db;
   await cloudResolveRole();
   cloudApplyRole();
-  if(cloud.role==="none"){ cloudSetStatus("error", "이 계정은 열람 권한이 없습니다."); cloudShowNoAccess(); return; }
   var na = document.getElementById("cloud-noaccess"); if(na) na.remove();
   var res = await Promise.all([db.collection("cards").get(), db.collection("meta").doc("vocab").get(), db.collection("events").get()]);
   var cards = [], events = [], vocab = {};
@@ -3485,6 +3535,7 @@ async function cloudStart(){
   cloudListen();
   cloudSetStatus("ok");
   cloudRerender();
+  cloudLoadReqCount();
 }
 function cloudResyncDiffs(){
   if(!cloud.ready || cloud.role==="view") return;
