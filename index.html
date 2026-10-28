@@ -987,6 +987,7 @@ async function undoLastMerge(){
 }
 
 function closeBackupModal(){ var o = document.getElementById("backup-overlay"); if(o){ o.remove(); if(!editMode) route(); } }
+var ONLINE_URL = "https://mobydeeep.github.io/SmartJobCard/";
 async function openBackupModal(){
   if(!canWrite){ showToast("보기 전용 계정은 동기화·백업을 사용할 수 없습니다"); return; }
   closeBackupModal();
@@ -1002,6 +1003,8 @@ async function openBackupModal(){
   var html = '<div class="sync-box">'+
     '<div style="font-weight:700;margin-bottom:4px">🔄 두 컴퓨터 동기화</div>'+
     '<div class="hint" style="margin-bottom:8px">각 컴퓨터에서 따로 고친 뒤 파일 1개를 웹하드·메신저·USB 등으로 옮겨 서로 합칩니다. 서로 고친 <b>항목만</b> 합쳐지고, 한쪽만 고친 항목은 그대로 가져옵니다.</div>'+
+    '<div class="note" style="margin-bottom:10px;line-height:1.6;font-size:13px">📱 <b>온라인 사이트</b>: <a href="'+ONLINE_URL+'" target="_blank" rel="noopener">'+ONLINE_URL+'</a> <button type="button" class="btn btn-sm" id="copy-online-url">주소 복사</button><br>'+
+      '이 컴퓨터에서 받은 <b>동기화파일</b>을 인터넷이 되는 곳에서 위 사이트(구글 로그인)에 <b>동기화파일 업로드</b>하면, 그 사이트를 <b>핸드폰으로 접속해서 최신 업무카드를 볼 수 있습니다.</b> 핸드폰 Chrome 메뉴의 \'홈 화면에 추가\'로 앱처럼 설치할 수도 있습니다.</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
       '<label style="display:flex;align-items:center;gap:5px;font-size:12.5px"><input type="checkbox" id="sync-incl" checked> 이미지·첨부파일 포함</label>'+
       '<button type="button" class="btn btn-sm btn-primary" id="sync-export">⬇ 동기화파일 다운로드</button>'+
@@ -1022,6 +1025,11 @@ async function openBackupModal(){
     '<div class="hint" style="margin-top:8px">복원하면 현재 데이터가 백업 시점의 내용으로 바뀝니다. 복원 직전 상태는 백업 목록에 <code>before_restore_…</code>로 자동 보관되어 되돌릴 수 있습니다.</div>';
   body.innerHTML = html;
 
+  var cu = document.getElementById("copy-online-url");
+  if(cu) cu.addEventListener("click", function(){
+    function fallback(){ try{ var t=document.createElement("textarea"); t.value=ONLINE_URL; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); showToast("주소를 복사했습니다"); }catch(e){ showToast("주소를 길게 눌러 복사해 주세요"); } }
+    try{ navigator.clipboard.writeText(ONLINE_URL).then(function(){ showToast("주소를 복사했습니다"); }, fallback); }catch(e){ fallback(); }
+  });
   document.getElementById("sync-export").addEventListener("click", async function(){
     var btn = document.getElementById("sync-export");
     btn.disabled = true; btn.textContent = "만드는 중…";
