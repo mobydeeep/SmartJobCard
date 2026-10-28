@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#1B3A63">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>오봉관리역 서무 스마트잡(Smart Job)카드</title>
+<title>Oscar System (오봉관리역 스마트잡 카드)</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -66,6 +66,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .brand h1{font-size:19px;font-weight:700;letter-spacing:-.01em}
 .brand .sub{color:var(--fg-muted);font-size:13px}
+.brand h1 small{font-size:.62em;font-weight:400;color:var(--fg-muted);letter-spacing:0;margin-left:.3em}
+.brand h1 small b{font-weight:700;color:var(--fg)}
+.period-extra{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-left:8px;font-size:12px}
+.period-extra .pe-label{color:var(--fg-muted)} .period-extra .pe-opt{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
 .brand .count{margin-left:auto;font-size:12.5px;color:var(--fg-muted);white-space:nowrap}
 
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -498,6 +502,14 @@ var PERIOD_COLORS = {"매일":"#BBDEFB","매주":"#B2EBF2","매월":"#B2DFDB","�
 var KPI_COLORS = {"안전":"#FFCDD2","서비스":"#FFE0B2","손익목표":"#FFECB3","미래성장":"#F8BBD0","해당없음":"#E0E0E0"};
 var PERIODS = Object.keys(PERIOD_COLORS);
 var KPIS = Object.keys(KPI_COLORS);
+function cardPeriods(c){
+  var out = [c.period||"수시"];
+  (c.period_extra||[]).forEach(function(p){ if(out.indexOf(p)===-1) out.push(p); });
+  return out;
+}
+function periodBadges(c){
+  return cardPeriods(c).map(function(p){ return '<span class="badge" style="background:'+(PERIOD_COLORS[p]||"#ddd")+'">'+esc(p)+'</span>'; }).join(" ");
+}
 var PERIOD_CODE = {"매일":"일","매주":"주","매월":"월","분기":"분기","반기":"반기","연간":"연","수시":"수시","인사발령/신규자 발생시":"인사"};
 var CHECK_OPTIONS = [
   {key:"기안(공문)",emoji:"📝"},
@@ -627,7 +639,7 @@ async function restoreFromText(text, label){
 }
 /* ---------- 두 컴퓨터 동기화 (파일 1개로 주고받기 · 항목별 병합) ---------- */
 var FIELD_LABELS = {
-  title:"업무명",category:"분류",owner:"담당자",dept:"관련부서",duration:"소요시간",period:"주기",kpi:"성과지표",
+  title:"업무명",category:"분류",owner:"담당자",dept:"관련부서",duration:"소요시간",period:"주기",period_extra:"추가 시기",kpi:"성과지표",
   keywords:"공문 키워드",purpose:"업무 목적",flow:"업무 처리 절차",submit_dest:"제출처",submit_way:"제출방법",
   submit_deadline:"제출기한",submit_attach:"첨부서류",submit_storage:"보관방법",submit_law:"관련법령",
   schedule:"업무 일정 기준",caution:"주의사항",reference:"참고자료",importance:"중요도",
@@ -1079,7 +1091,7 @@ function blankCard(){
   return {
     id: pid.id, no: pid.no, seq: pid.seq, cid: uid(),
     category: (VOCAB.categories[0]||""), owner:"", dept:"", title:"새 업무카드",
-    importance:0, duration:"", period:"수시", kpi:"해당없음",
+    importance:0, duration:"", period:"수시", period_extra:[], kpi:"해당없음",
     keywords:"", purpose:"",
     result_checks: checks, result_etc:"",
     flow:"", detail_steps:[],
@@ -1203,7 +1215,7 @@ function allRows(){ return CARDS.filter(function(c){ return !c.deleted; }); }
 function filteredRows(){
   var rows = allRows().slice();
   if(state.cat!=="전체") rows = rows.filter(function(r){return r.category===state.cat;});
-  if(state.period!=="전체") rows = rows.filter(function(r){return r.period===state.period;});
+  if(state.period!=="전체") rows = rows.filter(function(r){return cardPeriods(r).indexOf(state.period)!==-1;});
   if(state.kpi!=="전체") rows = rows.filter(function(r){return r.kpi===state.kpi;});
   if(state.owner!=="전체") rows = rows.filter(function(r){return tokenize(r.owner).indexOf(state.owner)!==-1;});
   if(state.dept!=="전체") rows = rows.filter(function(r){return tokenize(r.dept).indexOf(state.dept)!==-1;});
@@ -1469,7 +1481,7 @@ function renderTOC(){
 
   app.innerHTML =
     '<div class="topbar gutter">'+
-      '<div class="brand"><h1>오봉관리역 서무 스마트잡(Smart Job)카드</h1><span class="sub">수도권서부본부 오봉관리역</span><span class="count tnum" id="toc-total"></span></div>'+
+      '<div class="brand"><h1>Oscar System <small>(<b>오</b>봉관리역 <b>스</b>마트잡 <b>카</b>드)</small></h1><span class="sub">수도권서부본부 오봉관리역</span><span class="count tnum" id="toc-total"></span></div>'+
       navBarHtml("toc")+
       '<div class="search-row">'+
         '<div class="search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>'+
@@ -1545,7 +1557,7 @@ function updateResults(){
       '<td class="cell-title">'+esc(r.title)+titleBadgeFor(r)+snippetHtml(r)+'</td>'+
       '<td>'+esc(r.owner)+'</td>'+
       '<td><span class="stars">'+stars+'</span></td>'+
-      '<td><span class="badge" style="background:'+pColor+'">'+esc(r.period)+'</span></td>'+
+      '<td>'+periodBadges(r)+'</td>'+
       '<td><span class="badge" style="background:'+kColor+'">'+esc(r.kpi)+'</span></td>'+
       '</tr>';
   }).join("");
@@ -1714,7 +1726,7 @@ function exportCSV(){
     var ruleSummary = "";
     try{ ruleSummary = ruleLabel(r.schedule_rule); }catch(e){}
     return [
-      r.no, r.category, r.title, r.owner, r.dept, r.importance, r.duration, r.period, r.kpi,
+      r.no, r.category, r.title, r.owner, r.dept, r.importance, r.duration, cardPeriods(r).join(", "), r.kpi,
       r.keywords, r.purpose, r.flow, steps, checkedLabels, r.result_etc,
       r.submit_dest, r.submit_way, r.submit_deadline, r.submit_attach, r.submit_storage, r.submit_law,
       ruleSummary, r.schedule, r.caution, r.reference
@@ -1794,13 +1806,12 @@ function monthsForCard(card){
   }
   var found = Object.keys(months).map(Number);
   if(found.length) return found.sort(function(a,b){return a-b;});
-  switch(card.period){
-    case "매월": return [1,2,3,4,5,6,7,8,9,10,11,12];
-    case "분기": return [3,6,9,12];
-    case "반기": return [6,12];
-    case "연간": return [3];
-    default: return [];
-  }
+  var ms = {};
+  cardPeriods(card).forEach(function(p){
+    var arr = p==="매월" ? [1,2,3,4,5,6,7,8,9,10,11,12] : p==="분기" ? [3,6,9,12] : p==="반기" ? [6,12] : p==="연간" ? [3] : [];
+    arr.forEach(function(m){ ms[m]=1; });
+  });
+  return Object.keys(ms).map(Number).sort(function(a,b){return a-b;});
 }
 
 var planShowAll = false; // default: only important (★4+) tasks shown per cell, to stay scannable
@@ -1864,7 +1875,7 @@ function renderPlan(){
 
   app.innerHTML =
     '<div class="topbar gutter">'+
-      '<div class="brand"><h1>오봉관리역 서무 스마트잡(Smart Job)카드</h1><span class="sub">연간업무계획</span></div>'+
+      '<div class="brand"><h1>Oscar System <small>(<b>오</b>봉관리역 <b>스</b>마트잡 <b>카</b>드)</small></h1><span class="sub">연간업무계획</span></div>'+
       navBarHtml("plan")+mchips+
       '<div class="toolbar" style="padding-top:0">'+
         '<div class="chiprow" style="margin:0"><button type="button" class="chip'+(!planShowAll?" active":"")+'" data-show="important">★4 이상 주요 업무만</button><button type="button" class="chip'+(planShowAll?" active":"")+'" data-show="all">전체 업무 보기</button></div>'+
@@ -1999,6 +2010,13 @@ function dBadgeHtml(o, kind){
   return "";
 }
 /* badge for the TOC list: only overdue / today / within 3 days */
+function extraPeriodPicker(card){
+  var ex = card.period_extra||[];
+  return '<span class="period-extra" title="이 업무를 하는 다른 시기도 함께 표시합니다"><span class="pe-label">추가 시기</span>'+
+    PERIODS.filter(function(p){return p!==card.period;}).map(function(p){
+      return '<label class="pe-opt"><input type="checkbox" data-period-extra="'+esc(p)+'"'+(ex.indexOf(p)!==-1?" checked":"")+'> '+esc(p)+'</label>';
+    }).join("")+'</span>';
+}
 function titleBadgeFor(card){
   var today = new Date(), ts = getTrackStart(), we = weekEndOf(today);
   var worst = null;
@@ -2477,7 +2495,7 @@ function renderCardShell(id, isNew){
     '<div class="card-sheet">'+
       '<div class="card-strip" style="background:'+pColor+'1a">'+
         '<div class="left">'+
-          (editMode?'<select data-field="period">'+periodOpts+'</select>':'<span class="badge" style="background:'+pColor+'">'+esc(card.period)+'</span>')+
+          (editMode?'<select data-field="period">'+periodOpts+'</select>'+extraPeriodPicker(card):periodBadges(card))+
           '<span class="no tnum">'+esc(card.no)+'</span>'+
         '</div>'+
         (editMode?'<select data-field="kpi">'+kpiOpts+'</select>':'<span class="badge" style="background:'+kColor+'">'+esc(card.kpi)+'</span>')+
@@ -2497,7 +2515,7 @@ function renderCardShell(id, isNew){
       sectionsHtml+
       filesHtml+
       (isNew?'':doneBlockHtml(card))+
-      '<div class="print-only print-foot"><span>'+esc(card.no)+' · 오봉관리역 서무 스마트잡카드</span><span class="print-stamp">출력일시: '+esc(fmtTs(new Date().toISOString()))+'</span></div>'+
+      '<div class="print-only print-foot"><span>'+esc(card.no)+' · Oscar System (오봉관리역 스마트잡 카드)</span><span class="print-stamp">출력일시: '+esc(fmtTs(new Date().toISOString()))+'</span></div>'+
       (editMode?'<div class="edit-actions"><button class="btn btn-ghost" id="btn-cancel2">취소</button><button class="btn btn-primary" id="btn-save2">저장</button></div>':'')+
     '</div>'+
     (logPanelOpen ? logOverlayHtml(card) : '')+
@@ -2571,7 +2589,18 @@ function wireCardEvents(id, isNew, card){
   app.querySelectorAll("[data-field]").forEach(function(el){
     var f = el.getAttribute("data-field");
     el.addEventListener("input", function(){ draft[f] = el.value; });
-    el.addEventListener("change", function(){ draft[f] = el.value; });
+    el.addEventListener("change", function(){
+      draft[f] = el.value;
+      if(f==="period"){ draft.period_extra = (draft.period_extra||[]).filter(function(p){return p!==draft.period;}); renderCardShell(id,isNew); }
+    });
+  });
+  app.querySelectorAll("[data-period-extra]").forEach(function(cb){
+    cb.addEventListener("change", function(){
+      var arr = (draft.period_extra||[]).slice(), p = cb.getAttribute("data-period-extra"), i = arr.indexOf(p);
+      if(cb.checked && i===-1) arr.push(p);
+      if(!cb.checked && i!==-1) arr.splice(i,1);
+      draft.period_extra = arr;
+    });
   });
   // submit-info row visibility toggles
   app.querySelectorAll("[data-submit-vis]").forEach(function(cb){
@@ -2784,7 +2813,7 @@ function truncVal(v){
   return v.length>70 ? v.slice(0,70)+"…" : v;
 }
 function diffSummary(oldCard, newCard){
-  var fields = {title:"업무명",category:"분류",owner:"담당자",dept:"관련부서",duration:"소요시간",period:"주기",kpi:"성과지표",
+  var fields = {title:"업무명",category:"분류",owner:"담당자",dept:"관련부서",duration:"소요시간",period:"주기",period_extra:"추가 시기",kpi:"성과지표",
     keywords:"공문 키워드",purpose:"업무 목적",flow:"업무 처리 절차",submit_dest:"제출처",submit_way:"제출방법",
     submit_deadline:"제출기한",submit_attach:"첨부서류",submit_storage:"보관방법",submit_law:"관련법령",
     schedule:"업무 일정 기준",caution:"주의사항",reference:"참고자료",importance:"중요도"};
@@ -2938,7 +2967,7 @@ function cloudShowLogin(msg){
     document.body.appendChild(o);
   }
   o.style.alignItems = "center";
-  o.innerHTML = '<div class="log-panel" style="max-width:380px;text-align:center"><h3 style="font-size:17px">☁ 오봉관리역 서무 스마트잡카드</h3>'+
+  o.innerHTML = '<div class="log-panel" style="max-width:380px;text-align:center"><h3 style="font-size:17px">☁ Oscar System <small style="font-size:12px;font-weight:400;color:var(--fg-muted)">(<b style="font-weight:700">오</b>봉관리역 <b style="font-weight:700">스</b>마트잡 <b style="font-weight:700">카</b>드)</small></h3>'+
     '<p style="color:var(--fg-muted);font-size:13.5px;margin:8px 0 14px">로그인하면 컴퓨터·핸드폰 어디서든 같은 업무카드를 보고 고칠 수 있습니다.</p>'+
     (msg?'<div class="note" style="margin-bottom:10px">'+esc(msg)+'</div>':'')+
     '<button type="button" class="btn btn-primary" id="cloud-signin" style="width:100%;justify-content:center">구글 계정으로 로그인</button>'+

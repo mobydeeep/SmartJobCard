@@ -1,6 +1,6 @@
 {
-  "name": "오봉관리역 서무 스마트잡카드",
-  "short_name": "서무 스마트잡",
+  "name": "Oscar System (오봉관리역 스마트잡 카드)",
+  "short_name": "Oscar",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
