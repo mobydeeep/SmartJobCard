@@ -85,6 +85,9 @@ body.view-only a[href="#card/new"],body.view-only [data-more="new"],body.view-on
 .search-wrap input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg);font-size:14px}
 .search-wrap input:focus{outline:2px solid var(--accent);outline-offset:1px}
 .search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--fg-faint)}
+select.filter.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+select.filter.active option{background:var(--surface);color:var(--fg);font-weight:400}
+.m-filter-btn.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 select.filter{padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg);font-size:13.5px;min-width:0}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--fg);font-size:13.5px;cursor:pointer;white-space:nowrap}
 .btn:hover{border-color:var(--accent)}
@@ -1221,6 +1224,29 @@ function matchSnippet(r, q){
   return null;
 }
 
+/* 필터 목록은 '현재 카드에 실제로 쓰인 값'만 보여준다(고쳐서 안 쓰는 값은 사라짐) */
+function usedValues(kind){
+  var seen = {}, out = [];
+  allRows().forEach(function(r){
+    var toks = kind==="law" ? splitLaws(r.submit_law) : tokenize(r[kind]);
+    toks.forEach(function(t){ if(!seen[t]){ seen[t]=1; out.push(t); } });
+  });
+  var base = (kind==="owner"?VOCAB.owners:kind==="dept"?VOCAB.depts:(VOCAB.laws||[]));
+  var order = {}; base.forEach(function(v,i){ order[v]=i; });
+  out.sort(function(a,b){
+    var x = a in order ? order[a] : 1e6, y = b in order ? order[b] : 1e6;
+    return x!==y ? x-y : (a<b?-1:a>b?1:0);
+  });
+  return out;
+}
+function syncFilterActive(){
+  [["f-period","period"],["f-kpi","kpi"],["f-owner","owner"],["f-dept","dept"],["f-law","law"]].forEach(function(p){
+    var el = document.getElementById(p[0]); if(!el) return;
+    el.classList.toggle("active", !!state[p[1]] && state[p[1]]!=="전체");
+  });
+  var mb = document.getElementById("m-filter-btn");
+  if(mb){ var n = mobileFilterCount(); mb.innerHTML = "⚙ 필터"+(n?'<span class="fdot"></span>':""); mb.classList.toggle("active", n>0); }
+}
 function allRows(){ return CARDS.filter(function(c){ return !c.deleted; }); }
 
 function filteredRows(){
@@ -1493,13 +1519,17 @@ function renderTOC(){
     PERIODS.map(function(p){return '<option'+(state.period===p?" selected":"")+' value="'+esc(p)+'">'+esc(p)+'</option>';}).join("");
   var kpiOpts = '<option value="전체"'+(state.kpi==="전체"?" selected":"")+'>성과지표: 전체</option>'+
     KPIS.map(function(k){return '<option'+(state.kpi===k?" selected":"")+' value="'+esc(k)+'">'+esc(k)+'</option>';}).join("");
+  var usedOwners = usedValues("owner"), usedDepts = usedValues("dept"), usedLaws = usedValues("law").filter(function(l){return l!=="해당없음";});
+  if(state.owner!=="전체" && usedOwners.indexOf(state.owner)===-1) state.owner="전체";
+  if(state.dept!=="전체" && usedDepts.indexOf(state.dept)===-1) state.dept="전체";
+  if(state.law!=="전체" && usedLaws.indexOf(state.law)===-1) state.law="전체";
   var ownerOpts = '<option value="전체"'+(state.owner==="전체"?" selected":"")+'>담당자: 전체</option>'+
-    VOCAB.owners.map(function(o){return '<option'+(state.owner===o?" selected":"")+' value="'+esc(o)+'">'+esc(o)+'</option>';}).join("");
+    usedOwners.map(function(o){return '<option'+(state.owner===o?" selected":"")+' value="'+esc(o)+'">'+esc(o)+'</option>';}).join("");
   var deptOpts = '<option value="전체"'+(state.dept==="전체"?" selected":"")+'>관련부서: 전체</option>'+
-    VOCAB.depts.map(function(d){return '<option'+(state.dept===d?" selected":"")+' value="'+esc(d)+'">'+esc(d)+'</option>';}).join("");
+    usedDepts.map(function(d){return '<option'+(state.dept===d?" selected":"")+' value="'+esc(d)+'">'+esc(d)+'</option>';}).join("");
 
   var lawOpts = '<option value="전체"'+(state.law==="전체"?" selected":"")+'>관련법령: 전체</option>'+
-    (VOCAB.laws||[]).filter(function(l){return l!=="해당없음";}).map(function(l){
+    usedLaws.map(function(l){
       return '<option'+(state.law===l?" selected":"")+' value="'+esc(l)+'">'+esc(l)+'</option>';
     }).join("");
 
@@ -1561,6 +1591,7 @@ function snippetHtml(r){
   return '<div class="snip"><b>'+esc(m.label)+'</b> '+esc(m.pre)+'<mark>'+esc(m.hit)+'</mark>'+esc(m.post)+'</div>';
 }
 function updateResults(){
+  syncFilterActive();
   var rows = filteredRows();
   var total = allRows().length;
   var totalEl = document.getElementById("toc-total");
@@ -2119,7 +2150,7 @@ function renderToday(){
   }).join("");
   if(!body) body = '<div class="empty-state"><div class="big">남은 업무가 없습니다 🎉</div>이번 달 예정된 업무가 모두 처리되었거나, 일정이 설정된 업무가 없습니다.</div>';
 
-  var ownerOpts = '<option value="전체">담당자: 전체</option>'+VOCAB.owners.map(function(o){
+  var ownerOpts = '<option value="전체">담당자: 전체</option>'+usedValues("owner").map(function(o){
     return '<option value="'+esc(o)+'"'+(todayOwner===o?" selected":"")+'>'+esc(o)+'</option>';
   }).join("");
   var dateLabel = today.getFullYear()+"."+pad2(curM)+"."+pad2(today.getDate())+" ("+WEEKDAYS[today.getDay()]+")";
@@ -2129,7 +2160,7 @@ function renderToday(){
       '<div class="brand"><h1>📅 오늘 할 일</h1><span class="sub">'+dateLabel+'</span></div>'+
       navBarHtml("today")+
       '<div class="toolbar" style="padding-top:0">'+
-        '<select class="filter" id="today-owner">'+ownerOpts+'</select>'+
+        '<select class="filter'+(todayOwner!=="전체"?" active":"")+'" id="today-owner">'+ownerOpts+'</select>'+
         '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" id="today-showdone"'+(todayShowDone?" checked":"")+'> 이번 달 완료 항목도 보기</label>'+
       '</div>'+
     '</div>'+
