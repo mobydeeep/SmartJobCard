@@ -75,7 +75,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .brand h1[data-home]:hover .brand-name{color:var(--accent)}
 .brand h1 small{font-size:12.5px;font-weight:400;color:var(--fg-muted);letter-spacing:0;margin-left:.3em}
 .brand h1 small b{font-weight:700;color:var(--fg)}
-body.view-only a[href="#card/new"],body.view-only [data-more="new"],body.view-only label:has(#sync-import),body.view-only #sync-undo,body.view-only #bk-upload,body.view-only label:has(#bk-upload){display:none!important}
+body.view-only #backup-btn,body.view-only #sync-btn,body.view-only [data-more="sync"],body.view-only [data-more="trash"],body.view-only a[href="#trash"],body.view-only #btn-edit,body.view-only #btn-delete,body.view-only #btn-delete-cancel,body.view-only #btn-restore-inline,body.view-only [data-restore],body.view-only [data-purge],body.view-only #btn-add-event,body.view-only [data-ev-remove],body.view-only #btn-add-step,body.view-only .sync-remind,body.view-only a[href="#card/new"],body.view-only [data-more="new"],body.view-only label:has(#sync-import),body.view-only #sync-undo,body.view-only #bk-upload,body.view-only label:has(#bk-upload){display:none!important}
 .period-extra{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-left:8px;font-size:12px}
 .period-extra .pe-label{color:var(--fg-muted)} .period-extra .pe-opt{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
 .brand .count{margin-left:auto;font-size:12.5px;color:var(--fg-muted);white-space:nowrap}
@@ -617,6 +617,7 @@ function syncStatusText(){
   return "마지막으로 동기화 파일을 만든 때: "+a+" · 마지막으로 가져와 합친 때: "+b+" · 그 이후 고친 카드: "+i.changed+"개";
 }
 function syncRemindHtml(){
+  if(!canWrite) return "";
   var i = syncInfo();
   if(!i.changed) return "";
   if(i.days!==null && i.days < SYNC_REMIND_DAYS) return "";
@@ -923,6 +924,7 @@ async function undoLastMerge(){
 
 function closeBackupModal(){ var o = document.getElementById("backup-overlay"); if(o){ o.remove(); if(!editMode) route(); } }
 async function openBackupModal(){
+  if(!canWrite){ showToast("보기 전용 계정은 동기화·백업을 사용할 수 없습니다"); return; }
   closeBackupModal();
   var ov = document.createElement("div");
   ov.className = "log-overlay"; ov.id = "backup-overlay";
@@ -1336,7 +1338,7 @@ function route(){
     app.innerHTML = '<div class="loading-state gutter"><div class="spinner"></div>업무카드 데이터를 불러오는 중입니다…</div>';
     return;
   }
-  if(h==="card/new" && !canWrite){ location.hash = "toc"; return; }
+  if((h==="card/new" || h==="trash") && !canWrite){ location.hash = "toc"; return; }
   if(h==="card/new"){
     editMode = true; draft = blankCard();
     renderCardShell(draft.id, true);
@@ -1976,7 +1978,9 @@ function renderPlan(){
     });
   }
   app.querySelectorAll(".ev-row").forEach(wireEventRow);
+  if(!canWrite) app.querySelectorAll(".ev-row input,.ev-row select").forEach(function(el){ el.disabled = true; });
   document.getElementById("btn-add-event").addEventListener("click", function(){
+    if(!canWrite) return;
     var ev = {id:uid(), month:1, title:"", note:""};
     EVENTS = (EVENTS||[]).concat([ev]);
     persistEvent(ev);
@@ -2247,6 +2251,7 @@ function renderTrash(){
   wireNavBar(app);
   app.querySelectorAll("[data-restore]").forEach(function(b){
     b.addEventListener("click", function(){
+      if(!canWrite) return;
       var c = byId(b.getAttribute("data-restore"));
       if(c){
         delete c.deleted; delete c.deletedAt;
@@ -2258,6 +2263,7 @@ function renderTrash(){
   });
   app.querySelectorAll("[data-purge]").forEach(function(b){
     b.addEventListener("click", function(){
+      if(!canWrite) return;
       var cid = b.getAttribute("data-purge");
       if(window.confirm("정말 영구적으로 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")){
         CARDS = CARDS.filter(function(c){return c.id!==cid;});
@@ -2293,7 +2299,7 @@ function renderCard(id){
         '<button type="button" class="btn btn-primary" id="btn-restore-inline">↺ 복구</button>'+
         '<a class="btn" href="#trash">휴지통으로</a>'+
       '</div></div></div>';
-    document.getElementById("btn-restore-inline").addEventListener("click", function(){
+    document.getElementById("btn-restore-inline").addEventListener("click", function(){ if(!canWrite) return;
       delete card.deleted; delete card.deletedAt;
       persistCard(card, "휴지통에서 복구");
       showToast("카드를 복구했습니다");
@@ -2621,9 +2627,9 @@ function wireCardEvents(id, isNew, card){
 
   if(!editMode){
     var editBtn = document.getElementById("btn-edit");
-    if(editBtn) editBtn.addEventListener("click", function(){ editMode=true; draft=JSON.parse(JSON.stringify(card)); draft.schedule_rule = normalizeRule(draft.schedule_rule); renderCardShell(id,isNew); });
+    if(editBtn) editBtn.addEventListener("click", function(){ if(!canWrite) return; editMode=true; draft=JSON.parse(JSON.stringify(card)); draft.schedule_rule = normalizeRule(draft.schedule_rule); renderCardShell(id,isNew); });
     var delBtn = document.getElementById("btn-delete");
-    if(delBtn) delBtn.addEventListener("click", function(){
+    if(delBtn) delBtn.addEventListener("click", function(){ if(!canWrite) return;
       if(!deleteArmed){ deleteArmed=true; renderCardShell(id,isNew); return; }
       card.deleted = true;
       card.deletedAt = new Date().toISOString();
