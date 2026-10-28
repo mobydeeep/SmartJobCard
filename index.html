@@ -1,0 +1,3318 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1B3A63">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>오봉관리역 서무 스마트잡(Smart Job)카드</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="cloud-config.js"></script>
+<script>if("serviceWorker" in navigator && /^https?:/.test(location.protocol)){ window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); }); }</script>
+
+<style>
+/* Layout concept: sticky filter header + scrollable TOC table, routed by location.hash to #toc / #card/<id> / #card/new (single-column card reader+editor) */
+:root{
+  --bg:#F3F5F8; --surface:#FFFFFF; --surface-2:#EBEFF4; --border:#DAE1E9;
+  --fg:#172334; --fg-muted:#5B6676; --fg-faint:#8893A3;
+  --accent:#1B3A63; --accent-strong:#122A49; --accent-fg:#FFFFFF;
+  --warn-bg:#FFF7E6; --warn-border:#F2D98A; --warn-fg:#8A5A00;
+  --ref-bg:#EEF7EE; --ref-border:#BFE0BF; --ref-fg:#246B24;
+  --danger:#C0392B; --danger-bg:#FBEAE8; --success:#1F7A52; --success-bg:#E6F4ED;
+  --radius:12px; --radius-sm:7px;
+  --font-ui:'Noto Sans KR',system-ui,-apple-system,'Malgun Gothic',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+  --shadow:0 1px 2px rgba(23,35,52,.06),0 4px 16px rgba(23,35,52,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111722; --surface:#19212E; --surface-2:#212A3A; --border:#2E3A4E;
+    --fg:#E8ECF3; --fg-muted:#A7B2C2; --fg-faint:#6E7A8C;
+    --accent:#7FA6E0; --accent-strong:#9CBBEA; --accent-fg:#0D1520;
+    --warn-bg:#3A2E12; --warn-border:#6B551F; --warn-fg:#F0C954;
+    --ref-bg:#15301D; --ref-border:#2E5A38; --ref-fg:#8FD79F;
+    --danger:#E8897C; --danger-bg:#3A1F1C; --success:#78D2A8; --success-bg:#143327;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111722; --surface:#19212E; --surface-2:#212A3A; --border:#2E3A4E;
+  --fg:#E8ECF3; --fg-muted:#A7B2C2; --fg-faint:#6E7A8C;
+  --accent:#7FA6E0; --accent-strong:#9CBBEA; --accent-fg:#0D1520;
+  --warn-bg:#3A2E12; --warn-border:#6B551F; --warn-fg:#F0C954;
+  --ref-bg:#15301D; --ref-border:#2E5A38; --ref-fg:#8FD79F;
+  --danger:#E8897C; --danger-bg:#3A1F1C; --success:#78D2A8; --success-bg:#143327;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-ui);line-height:1.55;-webkit-font-smoothing:antialiased}
+.gutter{padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+h1,h2,h3{text-wrap:balance;margin:0}
+button{font-family:inherit}
+a{color:var(--accent)}
+.tnum{font-variant-numeric:tabular-nums}
+
+#app{max-width:1180px;margin:0 auto;padding-bottom:64px}
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);padding-top:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:21;background:var(--bg)}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.brand h1{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.brand .sub{color:var(--fg-muted);font-size:13px}
+.brand .count{margin-left:auto;font-size:12.5px;color:var(--fg-muted);white-space:nowrap}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.search-wrap{position:relative;flex:1 1 220px;min-width:0}
+.search-wrap input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg);font-size:14px}
+.search-wrap input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--fg-faint)}
+select.filter{padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg);font-size:13.5px;min-width:0}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--fg);font-size:13.5px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.btn-primary:hover{filter:brightness(1.07)}
+.btn-ghost{border-color:transparent;background:transparent}
+.btn-danger{color:var(--danger)}
+.btn-sm{padding:6px 10px;font-size:12.5px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.icon-btn{padding:4px 7px;font-size:12px;line-height:1}
+
+.chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--fg-muted);font-size:12.5px;cursor:pointer}
+.chip.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+
+.resultbar{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--fg-muted);margin:12px 0 8px;flex-wrap:wrap}
+.resultbar .spacer{flex:1}
+
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+table.toc{width:100%;border-collapse:collapse;font-size:13.5px;min-width:760px}
+table.toc th{position:sticky;top:0;background:var(--accent);color:var(--accent-fg);text-align:left;padding:10px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;cursor:pointer;user-select:none;white-space:nowrap}
+table.toc th .arrow{opacity:.6;font-size:10px;margin-left:3px}
+table.toc td{padding:9px 12px;border-top:1px solid var(--border);vertical-align:middle}
+table.toc tbody tr{cursor:pointer}
+table.toc tbody tr:hover{background:var(--surface-2)}
+table.toc tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.cell-no{font-family:var(--font-mono);color:var(--fg-muted);font-size:12px;white-space:nowrap}
+.cell-title{font-weight:500}
+.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;color:#1A2233;white-space:nowrap}
+.stars{letter-spacing:1px;color:#D99A00;font-size:12px}
+.empty-state{padding:48px 20px;text-align:center;color:var(--fg-muted)}
+.empty-state .big{font-size:15px;color:var(--fg);margin-bottom:4px;font-weight:600}
+.loading-state{padding:80px 20px;text-align:center;color:var(--fg-muted);font-size:13.5px}
+.spinner{width:26px;height:26px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .8s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spinner{animation-duration:2.4s}}
+
+.card-nav{display:flex;align-items:center;gap:8px;margin:14px 0;flex-wrap:wrap}
+.card-nav .spacer{flex:1}
+.card-sheet{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.card-strip{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;gap:10px;flex-wrap:wrap}
+.card-strip .left{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
+.card-strip .no{font-family:var(--font-mono);font-weight:500;font-size:12.5px;color:var(--fg-muted)}
+.card-head{padding:18px 20px 6px}
+.card-head h2{font-size:24px;font-weight:700;letter-spacing:-.01em}
+.card-head h2 input{font:inherit;font-weight:700;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 8px}
+.chips{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:13px;color:var(--fg-muted);align-items:center}
+.chips .chip-item{display:flex;align-items:center;gap:5px}
+.chips input,.chips select{font:inherit;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);padding:3px 7px;color:var(--fg)}
+.star-pick{display:inline-flex;gap:2px;cursor:pointer}
+.star-pick span{font-size:15px;color:var(--fg-faint)}
+.star-pick span.on{color:#D99A00}
+
+.sec{padding:14px 20px;border-top:1px solid var(--border);position:relative}
+.sec h3{font-size:12.5px;font-weight:700;color:var(--accent);letter-spacing:.01em;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.sec h3 .label{white-space:nowrap}
+.sec h3::after{content:"";flex:1;height:1px;background:var(--border)}
+.sec .move-btns{display:flex;gap:2px}
+.sec .body{font-size:13.5px;white-space:pre-wrap}
+.sec textarea, .sec input.field{width:100%;font:inherit;font-size:13.5px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--fg);padding:8px 10px;resize:vertical}
+.sec textarea{min-height:64px;white-space:pre-wrap;resize:both}
+.kv{display:grid;grid-template-columns:112px 1fr;gap:6px 10px;font-size:13.5px}
+.kv dt{color:var(--fg-muted)}
+.kv dd{margin:0}
+.row-vis{display:flex;align-items:center;gap:5px;cursor:pointer;color:inherit}
+.row-vis input{margin:0}
+.law-picker{display:flex;flex-direction:column;gap:6px}
+.law-picker select{width:100%;cursor:pointer}
+.kv .field{padding:5px 8px}
+.box-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:620px){.box-grid{grid-template-columns:1fr}}
+.box{border-radius:var(--radius-sm);padding:10px 12px;border:1px solid}
+.box.warn{background:var(--warn-bg);border-color:var(--warn-border);color:var(--warn-fg)}
+.box.ref{background:var(--ref-bg);border-color:var(--ref-border);color:var(--ref-fg)}
+.box .box-title{font-weight:700;font-size:12.5px;margin-bottom:4px}
+.box textarea{background:var(--surface);color:var(--fg)}
+.sched-table{width:100%;border-collapse:collapse;font-size:13px}
+.sched-table th,.sched-table td{border:1px solid var(--border);padding:6px 9px;text-align:left}
+.sched-table th{background:var(--surface-2);font-weight:600}
+.hint{font-size:11.5px;color:var(--fg-faint);margin-top:5px}
+.edit-actions{display:flex;gap:8px;padding:14px 20px;border-top:1px solid var(--border);background:var(--surface-2);flex-wrap:wrap}
+.save-toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--accent-fg);padding:10px 18px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:var(--shadow);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s, transform .25s}
+.save-toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+.readonly-note{font-size:12px;color:var(--fg-muted);background:var(--surface-2);padding:8px 12px;border-radius:var(--radius-sm)}
+
+footer.note{margin-top:28px;font-size:11.5px;color:var(--fg-faint);text-align:center;line-height:1.9}
+
+/* checklist pills */
+.check-pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--fg-faint);font-size:13px}
+.pill.on{background:var(--success-bg);border-color:var(--success);color:var(--success);font-weight:600}
+.check-edit{display:flex;flex-wrap:wrap;gap:8px}
+.check-edit label{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);font-size:13px;cursor:pointer}
+.check-edit input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent)}
+.etc-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.etc-row input{flex:1}
+
+/* detail steps */
+.steps-list{display:flex;flex-direction:column;gap:7px}
+.step-row{display:flex;gap:8px;align-items:flex-start}
+.step-num{flex:0 0 auto;font-weight:700;color:var(--accent);padding-top:6px}
+.step-row input{flex:1}
+.step-row .icon-btn{margin-top:2px}
+
+/* images */
+.img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.img-card{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-2)}
+.img-card img{width:100%;height:120px;object-fit:cover;display:block;background:var(--surface)}
+.img-card .cap{padding:6px 8px;font-size:12px}
+.img-card .cap input{width:100%;font-size:12px;border:1px solid var(--border);border-radius:5px;padding:3px 5px;background:var(--surface)}
+.img-card .cap-text{color:var(--fg-muted)}
+.img-card .img-actions{display:flex;justify-content:flex-end;padding:0 6px 6px}
+.add-tile{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--border);border-radius:var(--radius-sm);min-height:120px;color:var(--fg-muted);font-size:12.5px;cursor:pointer;flex-direction:column;gap:6px;background:transparent}
+.add-tile:hover{border-color:var(--accent);color:var(--accent)}
+
+/* files */
+.file-list{display:flex;flex-direction:column;gap:6px}
+.file-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);font-size:13px}
+.file-row .fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-row .fsize{color:var(--fg-faint);font-size:11.5px}
+
+/* logs */
+.log-overlay{position:fixed;inset:0;background:rgba(10,14,20,.45);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+@media (min-width:640px){.log-overlay{align-items:center}}
+.log-panel{background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;max-width:580px;width:100%;max-height:76vh;overflow-y:auto;box-shadow:var(--shadow);padding:16px 18px}
+@media (min-width:640px){.log-panel{border-radius:var(--radius)}}
+.log-panel h3{font-size:14px;margin-bottom:10px}
+.log-entry{padding:9px 0;border-top:1px solid var(--border);font-size:13px}
+.log-entry:first-child{border-top:none}
+.log-entry-head{font-weight:600}
+.log-entry .ts{color:var(--fg-faint);font-size:11.5px;display:block;margin-top:2px}
+.log-details{margin-top:6px;padding-left:10px;border-left:2px solid var(--border);display:flex;flex-direction:column;gap:4px}
+.log-detail{font-size:12px;color:var(--fg-muted);line-height:1.5}
+.log-detail b{color:var(--fg);font-weight:600}
+
+datalist{}
+
+@media print{
+  @page{size:A4;margin:12mm}
+  :root,:root[data-theme="dark"]{--bg:#fff;--surface:#fff;--surface-2:#f1f1f1;--border:#bbb;--fg:#000;--fg-muted:#333;--fg-faint:#666;--accent:#1B3A63;--warn-bg:#fff7e6;--warn-border:#d9b84a;--warn-fg:#6b4500;--ref-bg:#eef7ee;--ref-border:#9bc89b;--ref-fg:#1d5a1d}
+  .topbar,.card-nav,.edit-actions,.btn,.chiprow,.resultbar .btn,.log-overlay,.done-block,.move-btns,.hint,.viewnav,.share-pill,.store-note,#toast{display:none !important}
+  .print-only{display:block !important}
+  body{background:#fff;color:#000}
+  #app{max-width:none;padding:0}
+  .gutter{padding-left:0;padding-right:0}
+  .card-sheet{box-shadow:none;border:1px solid #999;font-size:10.5px;line-height:1.45}
+  .card-sheet .sec{padding:5px 10px;break-inside:avoid}
+  .card-sheet .sec h3{margin-bottom:3px}
+  .card-sheet .card-head{padding:8px 10px}
+  .card-sheet .card-head h2{font-size:17px;margin:2px 0 4px}
+  .card-sheet .card-strip{padding:5px 10px}
+  .card-sheet .body,.card-sheet .kv{font-size:10.5px}
+  .card-sheet img{max-width:100%;max-height:80mm;object-fit:contain}
+  .card-sheet a{color:inherit;text-decoration:none}
+  .print-skip{display:none !important}
+  .print-foot{margin-top:6px;padding:5px 10px;font-size:9.5px;color:#444;border-top:1px solid #999;display:flex !important;justify-content:space-between;gap:12px}
+  table.toc th{background:#1B3A63 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .badge{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .table-wrap{border:none}
+}
+
+/* view nav (업무카드 검색 / 연간업무계획) */
+.viewnav{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.search-row{margin-bottom:8px}
+.viewnav .btn.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:700}
+.store-note{font-size:11.5px;color:var(--fg-muted)}
+.store-note.bad{color:var(--danger)}
+.share-pill{font-size:11.5px;color:var(--ref-fg);background:var(--ref-bg);border:1px solid var(--ref-border);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.share-btn{font-size:12px}
+.share-warn{color:var(--warn-fg);background:var(--warn-bg);border-color:var(--warn-border)}
+
+/* today / completion tracking */
+.today-sum{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 12px}
+.today-sum .pill-n{font-size:12.5px;padding:5px 12px;border-radius:999px;background:var(--surface-2);color:var(--fg);border:1px solid var(--border)}
+.today-sum .pill-n b{font-variant-numeric:tabular-nums}
+.today-sum .pill-n.red{background:var(--danger-bg);color:var(--danger);border-color:var(--danger)}
+.today-group{margin:0 0 18px}
+.today-group h3{font-size:13.5px;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+.today-group h3 .cnt{font-size:11.5px;color:var(--fg-muted);font-weight:500}
+.today-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.today-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--border);flex-wrap:wrap}
+.today-row:first-child{border-top:none}
+.today-row.is-done .today-title{text-decoration:line-through;color:var(--fg-faint)}
+.today-check input{width:18px;height:18px;cursor:pointer;accent-color:var(--accent)}
+.today-title{flex:1;min-width:160px;color:var(--fg);text-decoration:none;font-weight:600;font-size:13.5px}
+.today-title:hover{text-decoration:underline}
+.today-meta,.today-rule{font-size:12px;color:var(--fg-muted)}
+.dbadge{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--fg-muted);white-space:nowrap}
+.dbadge.red{background:var(--danger-bg);color:var(--danger)}
+.dbadge.amber{background:var(--warn-bg);color:var(--warn-fg)}
+.dbadge.green{background:var(--success-bg);color:var(--success)}
+.nav-count{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:999px;background:var(--danger);color:#fff;font-size:11px;line-height:18px;text-align:center}
+.title-badge{margin-left:8px;vertical-align:middle}
+.plan-chip-done{opacity:.6;text-decoration:line-through}
+.done-block .mchips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px}
+.mchip{font-size:12px;padding:4px 9px;border-radius:999px;border:1px dashed var(--border);background:transparent;color:var(--fg-faint);cursor:pointer}
+.mchip.sched{border-style:solid;color:var(--fg);background:var(--surface-2)}
+.mchip.cur{outline:2px solid var(--accent)}
+.mchip.on{background:var(--success-bg);color:var(--success);border:1px solid var(--success);font-weight:700}
+.done-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border);flex-wrap:wrap;font-size:12.5px}
+.done-row .done-ts{color:var(--fg-muted)}
+.done-row .done-memo{flex:1;min-width:140px}
+.backup-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border);font-size:12.5px;flex-wrap:wrap}
+.backup-row .nm{flex:1;min-width:160px;word-break:break-all}
+.backup-row .sz{color:var(--fg-muted)}
+.print-only{display:none}
+.sync-box{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px}
+.sync-sum{margin:6px 0 6px 18px;padding:0;font-size:12.5px;line-height:1.6}
+.sync-sum .conf{color:var(--danger)}
+.sync-lines{max-height:200px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;background:var(--surface);font-size:12px;line-height:1.55}
+.sync-line .from{color:var(--fg-faint)}
+.sync-line .to{color:var(--success);font-weight:600}
+.sync-conflicts{margin-top:10px;border:1px solid var(--danger);border-radius:var(--radius-sm);padding:8px 10px;background:var(--danger-bg)}
+.sync-conf{padding:7px 0;border-top:1px solid var(--border);font-size:12.5px;display:flex;flex-direction:column;gap:3px}
+.sync-conf:first-of-type{border-top:none}
+.sync-conf label{display:flex;gap:6px;align-items:flex-start;cursor:pointer;word-break:break-all}
+.snip{font-size:11.5px;font-weight:400;color:var(--fg-muted);margin-top:3px;line-height:1.4}
+.snip b{color:var(--fg-faint);font-weight:600;margin-right:4px}
+.snip mark{background:var(--warn-bg);color:var(--warn-fg);padding:0 2px;border-radius:3px}
+.img-loading{display:flex;align-items:center;justify-content:center;min-height:90px;color:var(--fg-faint);font-size:12px;background:var(--surface-2);border-radius:8px}
+
+/* annual plan — horizontal, full-width grid: 분류(rows) x 1~12월(cols) */
+.plan-wrap{padding:14px;overflow-x:auto}
+.plan-grid{display:grid;grid-template-columns:120px repeat(12,minmax(0,1fr));width:100%;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.plan-grid .ph{background:var(--accent);color:var(--accent-fg);padding:8px 6px;font-size:11.5px;text-align:center;font-weight:700;white-space:nowrap}
+.plan-grid .ph:first-child{text-align:left;padding-left:12px}
+.plan-grid .rowlabel{padding:9px 10px;font-size:12.5px;font-weight:700;border-top:1px solid var(--border);display:flex;align-items:center;background:var(--surface-2)}
+.plan-cell{border-top:1px solid var(--border);border-left:1px solid var(--border);padding:5px;min-height:48px;display:flex;flex-direction:column;gap:4px}
+.plan-chip{font-size:11px;line-height:1.3;padding:4px 6px;border-radius:5px;background:var(--surface-2);color:var(--fg);cursor:pointer;border-left:3px solid var(--accent)}
+.plan-chip:hover{background:var(--accent);color:var(--accent-fg)}
+.plan-chip-no{font-family:var(--font-mono);color:var(--fg-muted);font-size:10px}
+.plan-chip:hover .plan-chip-no{color:var(--accent-fg);opacity:.85}
+.plan-chip-rule{display:block;font-size:10px;color:var(--fg-muted);margin-top:1px}
+.plan-chip:hover .plan-chip-rule{color:var(--accent-fg);opacity:.9}
+.plan-chip-event{border-left-color:#FFB300;cursor:default;background:var(--warn-bg);color:var(--warn-fg)}
+.plan-chip-event:hover{background:var(--warn-bg);color:var(--warn-fg)}
+.plan-chip-more{border-left-color:var(--fg-faint);color:var(--fg-muted);text-align:center;font-weight:600}
+@media (max-width:900px){ .plan-grid{grid-template-columns:70px repeat(12,minmax(62px,1fr));font-size:10.5px} }
+.ev-row{display:flex;gap:8px;align-items:center;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);margin-bottom:7px;flex-wrap:wrap}
+.ev-row input,.ev-row select{font:inherit;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg);padding:6px 8px}
+.ev-row input[data-ev-title]{flex:1;min-width:140px}
+.ev-row input[data-ev-note]{flex:2;min-width:160px}
+.sec .body img{max-width:100%;border-radius:8px;margin:6px 0;display:block;border:1px solid var(--border)}
+
+/* ---- help modal ---- */
+.help-overlay{position:fixed;inset:0;background:rgba(10,16,26,.55);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.help-overlay[hidden]{display:none}
+.help-modal{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:760px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+.help-head{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border)}
+.help-head h2{font-size:17px;font-weight:700;flex:1}
+.help-close{background:transparent;border:none;color:var(--fg-muted);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);line-height:1}
+.help-close:hover{background:var(--surface-2);color:var(--fg)}
+.help-tabs{display:flex;gap:4px;padding:10px 16px 0;border-bottom:1px solid var(--border)}
+.help-tab{padding:9px 14px;border:none;background:transparent;color:var(--fg-muted);font-size:13.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.help-tab:hover{color:var(--fg);background:var(--surface-2)}
+.help-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.help-body{padding:18px 22px 24px;overflow-y:auto;font-size:13.5px;line-height:1.7;color:var(--fg)}
+.help-body h3{font-size:14.5px;color:var(--accent);margin:18px 0 8px;display:flex;align-items:center;gap:7px}
+.help-body h3:first-child{margin-top:0}
+.help-body p{margin:0 0 10px}
+.help-body ol,.help-body ul{margin:0 0 10px;padding-left:22px}
+.help-body li{margin-bottom:6px}
+.help-body .note{background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn-fg);border-radius:var(--radius-sm);padding:10px 13px;margin:10px 0;font-size:12.5px}
+.help-body .tip{background:var(--ref-bg);border:1px solid var(--ref-border);color:var(--ref-fg);border-radius:var(--radius-sm);padding:10px 13px;margin:10px 0;font-size:12.5px}
+.help-body code{font-family:var(--font-mono);background:var(--surface-2);padding:1px 6px;border-radius:4px;font-size:12px}
+.help-body .step-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accent-fg);font-size:11px;font-weight:700;margin-right:7px;flex-shrink:0}
+.help-steps{list-style:none;padding-left:0}
+.help-steps li{display:flex;align-items:flex-start;gap:2px;margin-bottom:10px}
+
+/* ---- trash (recycle bin) ---- */
+.trash-list{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden}
+.trash-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap}
+.trash-row:first-child{border-top:none}
+.trash-info{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}
+.trash-info .cell-title{font-weight:600}
+.trash-date{font-size:12px;color:var(--fg-muted)}
+.trash-actions{display:flex;gap:7px;flex-shrink:0}
+
+#cloud-badge{position:fixed;top:calc(env(safe-area-inset-top,0px) + 4px);right:8px;z-index:70;font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--fg-muted);cursor:pointer;font-family:inherit;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+#cloud-badge.ok{color:var(--success);border-color:var(--success);background:var(--success-bg)}
+#cloud-badge.warn{color:var(--warn-fg);border-color:var(--warn-border);background:var(--warn-bg)}
+#cloud-badge.bad{color:var(--danger);border-color:var(--danger);background:var(--danger-bg)}
+#cloud-login{z-index:90}
+.more-panel .more-item{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:13px 6px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--fg);font-family:inherit;font-size:15px;cursor:pointer}
+.more-panel .more-item .ic{font-size:22px;width:30px;text-align:center}
+.more-panel .more-item .tx{display:flex;flex-direction:column;gap:1px}
+.more-panel .more-item small{color:var(--fg-muted);font-size:12.5px}
+/* ================= 모바일(폰) 화면: 앱처럼 보이는 레이아웃 ================= */
+.m-only{display:none}
+#tabbar{display:none}
+@media screen and (max-width:640px){
+  .m-only{display:flex}
+  html{-webkit-text-size-adjust:100%}
+  body{font-size:15px;-webkit-tap-highlight-color:transparent}
+  input,select,textarea{font-size:16px !important}
+  .btn{min-height:40px}
+  .btn-sm{min-height:34px}
+  #app{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+  .viewnav{display:none}
+  .footer-note,footer.note{font-size:11px}
+
+  /* 하단 탭바 */
+  #tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--surface);border-top:1px solid var(--border);
+    padding:4px max(6px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-left,0px));box-shadow:0 -2px 12px rgba(0,0,0,.08)}
+  #tabbar button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;border:0;background:transparent;color:var(--fg-muted);
+    padding:6px 2px 4px;font-size:11px;font-weight:600;border-radius:10px;position:relative;cursor:pointer;font-family:inherit}
+  #tabbar button .ic{font-size:21px;line-height:1.1}
+  #tabbar button.active{color:var(--accent);background:var(--surface-2)}
+  #tabbar .tb-badge{position:absolute;top:2px;left:calc(50% + 6px);min-width:17px;height:17px;border-radius:9px;background:#C62828;color:#fff;font-size:10.5px;
+    display:flex;align-items:center;justify-content:center;padding:0 4px;font-weight:700}
+  #tabbar .tb-dot{position:absolute;top:5px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:#E8A100}
+  #app:has(#btn-save) ~ #tabbar{display:none}
+  #app:has(#btn-save){padding-bottom:24px}
+
+  /* 상단 머리말 */
+  .topbar{padding-top:10px;padding-bottom:8px}
+  .brand{margin-bottom:8px;flex-wrap:nowrap;gap:8px;align-items:center}
+  .brand h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .brand .sub{display:none}
+  .brand .count{font-size:12px;flex:none}
+  .search-row{display:flex;gap:8px;margin-bottom:6px}
+  .search-wrap{flex:1}
+  .search-wrap input{padding:11px 12px 11px 36px;border-radius:12px}
+  .m-filter-btn{flex:none;position:relative;padding:0 14px;border-radius:12px}
+  .m-filter-btn .fdot{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:#E8A100}
+  .topbar .toc-filters{display:none}
+  .topbar.filters-open .toc-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 4px}
+  .topbar.filters-open .toc-filters select.filter{width:100%;min-width:0}
+  .topbar.filters-open .toc-filters #f-law,.topbar.filters-open .toc-filters #btn-export{grid-column:1/-1}
+  .topbar .toolbar{gap:10px}
+  .today-group h3 .cnt{white-space:nowrap}
+  .chiprow{flex-wrap:nowrap;overflow-x:auto;margin:4px -16px 0;padding:2px 16px 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .chiprow::-webkit-scrollbar{display:none}
+  .chip{flex:none;padding:7px 13px;font-size:13px}
+
+  /* 업무카드 목록 → 카드형 리스트 */
+  .resultbar{margin:10px 0 6px}
+  .table-wrap{border:0;background:transparent;overflow:visible}
+  table.toc{min-width:0;display:block;font-size:14px}
+  table.toc thead{display:none}
+  table.toc tbody{display:flex;flex-direction:column;gap:8px}
+  table.toc tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  table.toc tbody tr:active{background:var(--surface-2)}
+  table.toc td{padding:0;border:0}
+  table.toc td.cell-title{order:-2;flex:0 0 100%;font-size:15.5px;font-weight:600;line-height:1.4}
+  table.toc td.cell-no{order:-1;font-size:11.5px}
+  table.toc td:nth-child(2){order:0;font-size:12px;color:var(--fg-muted)}
+  table.toc td:nth-child(4){order:1;font-size:12px;color:var(--fg-muted)}
+  table.toc td:nth-child(5){order:2}
+  table.toc td:nth-child(6){order:3;margin-left:auto}
+  table.toc td:nth-child(7){order:4}
+  table.toc td:nth-child(2)::after{content:"·";margin-left:8px}
+
+  /* 오늘 할 일 */
+  .today-row{padding:12px 12px;gap:8px}
+  .today-check input{width:26px;height:26px}
+  .today-title{font-size:15px;font-weight:600;flex:1 1 60%;min-width:0}
+  .today-sum{flex-wrap:wrap;gap:6px}
+
+  /* 연간업무계획: 월 하나씩 보기 */
+  .plan-mchips{display:flex;gap:6px;overflow-x:auto;margin:6px -16px 0;padding:2px 16px 4px;scrollbar-width:none}
+  .plan-mchips::-webkit-scrollbar{display:none}
+  .plan-mchips button{flex:none;padding:7px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--fg-muted);font-size:13px;font-weight:600;font-family:inherit}
+  .plan-mchips button.sel{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .plan-mchips button.cur::after{content:"·";margin-left:2px}
+  .plan-wrap{padding:0;border:0;background:transparent;overflow:visible}
+  .plan-grid{grid-template-columns:84px 1fr;font-size:13px;border-radius:14px}
+  .plan-grid .ph{display:none}
+  .plan-grid .plan-cell:not(.sel){display:none}
+  .plan-grid .rowlabel{font-size:12.5px;padding:10px 8px}
+  .plan-cell{padding:8px;gap:6px;border-left:1px solid var(--border);min-height:56px}
+  .plan-chip{font-size:13.5px;padding:8px 10px}
+  .plan-chip-rule{font-size:11.5px}
+  .ev-row{flex-direction:column;align-items:stretch}
+  .ev-row input,.ev-row select{width:100%;min-width:0 !important}
+
+  /* 카드 상세 */
+  .card-nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:25;background:var(--bg);margin:0 -16px;padding:8px 16px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border)}
+  .card-nav::-webkit-scrollbar{display:none}
+  .card-nav .btn{flex:none;white-space:nowrap}
+  .card-nav .spacer{flex:1 0 4px;order:9}
+  .card-nav > *{order:5}
+  .card-nav > a.btn:first-child{order:0}
+  .card-nav #btn-edit,.card-nav #btn-cancel,.card-nav #btn-save{order:1}
+  .card-sheet{margin-top:10px;border-radius:14px}
+  .card-sheet .body,.card-sheet .kv{font-size:15px;line-height:1.65}
+  .card-sheet .sec{padding-left:16px;padding-right:16px}
+  .card-sheet .sec h3{font-size:14px}
+  .card-sheet img{max-width:100%;height:auto}
+  .mchip{padding:7px 12px;font-size:13px}
+  .done-row{flex-wrap:wrap}
+  .help-body,.help-panel{font-size:14px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav id="tabbar" aria-label="주 메뉴"></nav>
+<div id="toast" class="save-toast"></div>
+<div class="help-overlay" id="help-overlay" hidden>
+  <div class="help-modal" role="dialog" aria-modal="true" aria-label="도움말">
+    <div class="help-head">
+      <h2>❓ 도움말</h2>
+      <button type="button" class="help-close" id="help-close">✕</button>
+    </div>
+    <div class="help-tabs">
+      <button type="button" class="help-tab" data-help-tab="usage">사용방법</button>
+    </div>
+    <div class="help-body" id="help-body"></div>
+  </div>
+</div>
+<script>
+(function(){
+"use strict";
+
+var SEED_CARDS = [];
+var SEED_VOCAB = {"categories": ["Ⅰ. 인사·근태", "Ⅱ. 예산·물품", "Ⅲ. 안전·보건", "Ⅳ. 교육", "Ⅴ. 문서·공문 처리", "Ⅵ. 서비스·홍보·사회공헌", "Ⅶ. 성과관리·평가", "Ⅷ. 기타 업무"], "owners": [], "depts": [], "laws": []};
+var SEED_EVENTS = [];
+var MONTH_NAMES = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+
+var PERIOD_COLORS = {"매일":"#BBDEFB","매주":"#B2EBF2","매월":"#B2DFDB","분기":"#C8E6C9","반기":"#D1C4E9","연간":"#C5CAE9","수시":"#CFD8DC","인사발령/신규자 발생시":"#D7CCC8"};
+var KPI_COLORS = {"안전":"#FFCDD2","서비스":"#FFE0B2","손익목표":"#FFECB3","미래성장":"#F8BBD0","해당없음":"#E0E0E0"};
+var PERIODS = Object.keys(PERIOD_COLORS);
+var KPIS = Object.keys(KPI_COLORS);
+var PERIOD_CODE = {"매일":"일","매주":"주","매월":"월","분기":"분기","반기":"반기","연간":"연","수시":"수시","인사발령/신규자 발생시":"인사"};
+var CHECK_OPTIONS = [
+  {key:"기안(공문)",emoji:"📝"},
+  {key:"내부결재(공문)",emoji:"🗂️"},
+  {key:"KOVIS 등록",emoji:"💻"},
+  {key:"파발마 제출",emoji:"📮"},
+  {key:"원본 보관",emoji:"🗄️"},
+  {key:"게시판 게시",emoji:"📌"},
+  {key:"현장 공지",emoji:"📢"}
+];
+var SECTION_LABELS = {
+  keywords:"공문 키워드", purpose:"업무 목적", result:"결과처리 방식", flow:"업무 처리 절차 (Flow)",
+  detail:"상세 처리 방법", submit:"제출 정보", schedule:"업무 일정 기준", images:"이미지", caution_ref:"주의사항 · 참고자료"
+};
+var DEFAULT_ORDER = ["keywords","purpose","result","flow","detail","submit","schedule","images","caution_ref"];
+
+var CARDS = null;       // array once loaded
+var VOCAB = null;       // {categories,owners,depts}
+var EVENTS = null;      // custom annual events
+var idb = null, canWrite = true, storageOk = false;
+var blobUrlCache = {};  // blob id -> object URL (images/files/pasted content)
+
+function safeFileName(s){ return String(s||"file").replace(/[\\/:*?"<>|]+/g,"_").slice(0,160); }
+function attachmentFileName(bid, originalName){ return bid + "__" + safeFileName(originalName||"file"); }
+
+/* ---------- 백업 (이 컴퓨터 브라우저 안에 자동 보관) ----------
+   하루 1개(그날 처음 연 시점의 상태)를 자동 보관하고 최근 BACKUP_KEEP_DAYS일치만 남깁니다.
+   파일로 내려받아 따로 보관할 수도 있습니다. */
+var BACKUP_KEEP_DAYS = 14;
+function serializeState(){
+  return JSON.stringify({cards:CARDS, vocab:VOCAB, events:EVENTS, seqCounter:seqCounter, savedAt:new Date().toISOString()});
+}
+async function loadBackupList(){
+  var r = await idbGet("meta","localBackups").catch(function(){return null;});
+  return (r && r.value) || [];
+}
+function pruneBackupList(list){
+  list.sort(function(a,b){ return a.name<b.name?1:-1; });
+  var rules = [[/^smartjob_backup_\d{4}-\d{2}-\d{2}$/, BACKUP_KEEP_DAYS],[/_수동$/, 5],[/^before_restore_/, 3]], cnt = [0,0,0];
+  return list.filter(function(it){
+    for(var i=0;i<rules.length;i++){
+      if(rules[i][0].test(it.name)){ cnt[i]++; return cnt[i] <= rules[i][1]; }
+    }
+    return true;
+  });
+}
+async function addBackup(name, text){
+  if(!idb || !canWrite) return;
+  var l = (await loadBackupList()).filter(function(x){ return x.name!==name; });
+  l.push({name:name, ts:Date.now(), size:new Blob([text]).size, text:text});
+  await idbPut("meta", {key:"localBackups", value:pruneBackupList(l)});
+}
+async function ensureDailyBackup(){
+  if(!idb || !canWrite || !CARDS) return;
+  try{
+    var name = "smartjob_backup_"+localDateStr();
+    var l = await loadBackupList();
+    if(l.some(function(x){ return x.name===name; })) return;
+    await addBackup(name, serializeState());
+  }catch(e){}
+}
+async function listBackups(){
+  return (await loadBackupList()).map(function(x){ return {name:x.name, size:x.size, lastModified:x.ts}; })
+    .sort(function(a,b){ return a.name<b.name?1:-1; });
+}
+
+/* ---------- 동기화 알림 ---------- */
+var SYNC_REMIND_DAYS = 7;
+var syncState = {lastExport:"", lastImport:""};
+function saveSyncState(){ if(idb && canWrite) idbPut("meta", {key:"syncState", value:syncState}).catch(function(){}); }
+function markSynced(kind){
+  syncState[kind==="export"?"lastExport":"lastImport"] = new Date().toISOString();
+  saveSyncState();
+}
+function lastSyncIso(){ return (syncState.lastExport||"") > (syncState.lastImport||"") ? syncState.lastExport : (syncState.lastImport||""); }
+function syncInfo(){
+  var base = lastSyncIso(), changed = 0;
+  (CARDS||[]).forEach(function(c){
+    var hit = false;
+    Object.keys(c.fts||{}).forEach(function(k){ if(((c.fts[k]||{}).t||"") > base) hit = true; });
+    Object.keys(c.done||{}).forEach(function(k){ if(((c.done[k]||{}).ts||"") > base) hit = true; });
+    if(hit) changed++;
+  });
+  var days = base ? Math.floor((Date.now()-Date.parse(base))/86400000) : null;
+  return {base:base, days:days, changed:changed};
+}
+function syncStatusText(){
+  var i = syncInfo();
+  var a = syncState.lastExport ? fmtTs(syncState.lastExport) : "없음";
+  var b = syncState.lastImport ? fmtTs(syncState.lastImport) : "없음";
+  return "마지막으로 동기화 파일을 만든 때: "+a+" · 마지막으로 가져와 합친 때: "+b+" · 그 이후 고친 카드: "+i.changed+"개";
+}
+function syncRemindHtml(){
+  var i = syncInfo();
+  if(!i.changed) return "";
+  if(i.days!==null && i.days < SYNC_REMIND_DAYS) return "";
+  var txt = (i.days===null ? "아직 동기화한 적 없음" : "마지막 동기화 "+i.days+"일 전")+" · 고친 카드 "+i.changed+"개";
+  return '<button type="button" class="btn btn-sm share-btn share-warn" id="sync-remind" title="동기화 파일을 만들어 다른 컴퓨터와 맞춰 보세요">🔄 '+esc(txt)+'</button>';
+}
+
+function idbClear(name){ return new Promise(function(res,rej){ var r=idbStore(name,"readwrite").clear(); r.onsuccess=function(){res();}; r.onerror=function(){rej(r.error);}; }); }
+async function restoreFromText(text, label){
+  var data;
+  try{ data = JSON.parse(text); }catch(e){ showToast("백업 파일을 읽을 수 없습니다"); return false; }
+  if(!data || !Array.isArray(data.cards)){ showToast("올바른 백업 파일이 아닙니다"); return false; }
+  try{
+    var d = new Date();
+    await addBackup("before_restore_"+localDateStr(d)+"_"+pad2(d.getHours())+pad2(d.getMinutes())+pad2(d.getSeconds()), serializeState());
+  }catch(e){}
+  CARDS = data.cards;
+  VOCAB = data.vocab || VOCAB;
+  EVENTS = data.events || [];
+  seqCounter = Math.max(data.seqCounter||0, CARDS.reduce(function(m,c){return Math.max(m,c.seq||0);},0));
+  if(idb && canWrite){
+    try{
+      await idbClear("cards"); await idbClear("events");
+      for(var i=0;i<CARDS.length;i++) await idbPut("cards", CARDS[i]);
+      for(var j=0;j<EVENTS.length;j++) await idbPut("events", EVENTS[j]);
+      await idbPut("meta", {key:"vocab", value:VOCAB});
+      await idbPut("meta", {key:"seqCounter", value:seqCounter});
+    }catch(e){}
+  }
+  refreshSnaps();
+  showToast("백업에서 복원했습니다: "+label);
+  route();
+  return true;
+}
+/* ---------- 두 컴퓨터 동기화 (파일 1개로 주고받기 · 항목별 병합) ---------- */
+var FIELD_LABELS = {
+  title:"업무명",category:"분류",owner:"담당자",dept:"관련부서",duration:"소요시간",period:"주기",kpi:"성과지표",
+  keywords:"공문 키워드",purpose:"업무 목적",flow:"업무 처리 절차",submit_dest:"제출처",submit_way:"제출방법",
+  submit_deadline:"제출기한",submit_attach:"첨부서류",submit_storage:"보관방법",submit_law:"관련법령",
+  schedule:"업무 일정 기준",caution:"주의사항",reference:"참고자료",importance:"중요도",
+  detail_steps:"상세 처리 방법",result_checks:"결과처리 방식",result_etc:"결과처리 기타",images:"이미지",files:"첨부파일",
+  sectionOrder:"항목 순서",schedule_rule:"연간계획 연동 설정",submit_visible:"제출정보 표시 항목",deleted:"삭제(휴지통)",deletedAt:"삭제 시각"
+};
+function fieldLabel(k){ return FIELD_LABELS[k] || k; }
+function cloneJSON(v){ return v===undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+function sameVal(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+function cardIdentity(c){
+  if(c.cid) return c.cid;
+  var l = (c.logs||[]).filter(function(x){ return x.summary==="카드 생성"; })[0];
+  return l ? l.ts : "";
+}
+/* 한 카드의 한 항목에 대한 "수정 기록". 기록이 없는 구버전 카드는 카드 전체 수정시각(updatedAt)을 대신 씁니다. */
+function sideEntry(card, k){
+  var e = card.fts && card.fts[k];
+  if(e) return {t:e.t||"", b:e.b||[]};
+  if(card.fts) return {t:"", b:[]};
+  return card.updatedAt ? {t:card.updatedAt, b:[""]} : {t:"", b:[]};
+}
+function planCardMerge(local, inc){
+  var takes = [], conflicts = [], keys = {};
+  Object.keys(local).forEach(function(k){ keys[k]=1; });
+  Object.keys(inc).forEach(function(k){ keys[k]=1; });
+  Object.keys(keys).forEach(function(k){
+    if(SYNC_SKIP[k]) return;
+    var lv = local[k], iv = inc[k];
+    if(sameVal(lv, iv)) return;
+    var le = sideEntry(local,k), ie = sideEntry(inc,k);
+    if(ie.t===le.t) return;                                   // 어느 쪽도 고친 기록이 다르지 않음 → 내 것 유지
+    if(ie.b.indexOf(le.t)!==-1){ takes.push({k:k, from:lv, to:iv, entry:ie}); return; }   // 상대가 내 버전을 이어서 고침 → 가져오기
+    if(le.b.indexOf(ie.t)!==-1) return;                       // 내가 더 새로운 버전 → 유지
+    conflicts.push({k:k, lv:lv, iv:iv, le:le, ie:ie, winner:(ie.t>le.t?"inc":"local")}); // 서로 따로 고침
+  });
+  return {takes:takes, conflicts:conflicts};
+}
+function mergeDone(a, b){
+  a = a || {}; b = b || {};
+  var out = {}, changed = false, keys = {};
+  Object.keys(a).forEach(function(k){ keys[k]=1; });
+  Object.keys(b).forEach(function(k){ keys[k]=1; });
+  Object.keys(keys).forEach(function(k){
+    var x = a[k], y = b[k];
+    if(x && y){
+      if((y.ts||"") > (x.ts||"")){ out[k] = y; if(!sameVal(x,y)) changed = true; } else out[k] = x;
+    } else if(y){ out[k] = y; changed = true; }
+    else out[k] = x;
+  });
+  return {done:out, changed:changed};
+}
+function unionLogs(a, b){
+  var seen = {}, out = [];
+  (a||[]).concat(b||[]).forEach(function(l){
+    var key = (l.ts||"")+"|"+(l.summary||"");
+    if(seen[key]) return; seen[key] = 1; out.push(l);
+  });
+  out.sort(function(x,y){ return (x.ts||"")<(y.ts||"") ? -1 : 1; });
+  return out.slice(-40);
+}
+function buildSyncPlan(data){
+  var plan = {newCards:[], collisions:[], cardPlans:[], identical:0, vocabAdds:[], eventsAdds:[], doneChanges:0,
+    blobCount:(data.blobs||[]).filter(function(b){ return b && b.id && !blobUrlCache[b.id]; }).length};
+  var byLocal = {}, byCid = {};
+  CARDS.forEach(function(c){ byLocal[c.id] = c; if(c.cid) byCid[c.cid] = c; });
+  (data.cards||[]).forEach(function(inc){
+    // 같은 카드 찾기: 고유식별자(cid)가 같으면 번호가 달라도 같은 카드, 없으면 번호(id)로
+    var loc = (inc.cid && byCid[inc.cid]) || byLocal[inc.id];
+    if(!loc){ plan.newCards.push(inc); return; }
+    var li = cardIdentity(loc), ii = cardIdentity(inc);
+    if(li && ii && li!==ii){ plan.collisions.push(inc); return; }
+    var cp = planCardMerge(loc, inc);
+    cp.card = loc; cp.inc = inc; cp.doneMerged = mergeDone(loc.done, inc.done);
+    if(cp.doneMerged.changed) plan.doneChanges++;
+    if(cp.takes.length || cp.conflicts.length || cp.doneMerged.changed) plan.cardPlans.push(cp); else plan.identical++;
+  });
+  var iv = data.vocab || {};
+  Object.keys(iv).forEach(function(kind){
+    if(!Array.isArray(iv[kind])) return;
+    var have = (VOCAB[kind]||[]);
+    iv[kind].forEach(function(v){ if(have.indexOf(v)===-1) plan.vocabAdds.push({kind:kind, value:v}); });
+  });
+  var haveEv = {}; (EVENTS||[]).forEach(function(e){ haveEv[e.id] = 1; });
+  (data.events||[]).forEach(function(e){ if(!haveEv[e.id]) plan.eventsAdds.push(e); });
+  return plan;
+}
+function planIsEmpty(p){
+  return !p.newCards.length && !p.collisions.length && !p.cardPlans.length && !p.vocabAdds.length && !p.eventsAdds.length && !p.blobCount;
+}
+async function importBlobs(list){
+  var n = 0;
+  for(var i=0;i<(list||[]).length;i++){
+    var b = list[i];
+    if(!b || !b.id || blobUrlCache[b.id]) continue;
+    var bin = atob(b.b64), arr = new Uint8Array(bin.length);
+    for(var j=0;j<bin.length;j++) arr[j] = bin.charCodeAt(j);
+    var blob = new Blob([arr], {type:b.type||"application/octet-stream"});
+    blobUrlCache[b.id] = URL.createObjectURL(blob);
+    if(idb && canWrite){ try{ await idbPut("blobs", {id:b.id, blob:blob, name:b.name, contentType:b.type, sizeBytes:blob.size}); }catch(e){} }
+    n++;
+  }
+  return n;
+}
+function applyCardPlan(cp, decisions, now, opts){
+  var loc = cp.card, details = [], names = [];
+  loc.fts = loc.fts || {};
+  function setField(k, val){ if(val===undefined) delete loc[k]; else loc[k] = cloneJSON(val); }
+  cp.takes.forEach(function(t){
+    setField(t.k, cp.inc[t.k]);
+    loc.fts[t.k] = {t:t.entry.t, b:t.entry.b.slice()};
+    details.push({label:fieldLabel(t.k), from:truncVal(t.from), to:truncVal(t.to)});
+    names.push(fieldLabel(t.k));
+  });
+  cp.conflicts.forEach(function(c){
+    var pick = (decisions && decisions[loc.id+"|"+c.k]) || c.winner;
+    if(pick==="inc"){
+      setField(c.k, cp.inc[c.k]);
+      details.push({label:fieldLabel(c.k)+" (충돌: 상대 것 선택)", from:truncVal(c.lv), to:truncVal(c.iv)});
+      names.push(fieldLabel(c.k));
+    }
+    loc.fts[c.k] = {t:now, b:[c.le.t, c.ie.t]};    // 양쪽 버전을 이어받은 새 버전으로 기록
+  });
+  loc.done = cp.doneMerged.done;
+  loc.logs = unionLogs(loc.logs, cp.inc.logs);
+  if(names.length && !(opts && opts.noLog)){ loc.logs = loc.logs.concat([{ts:now, summary:"동기화로 반영: "+names.join(", "), details:details}]).slice(-40); }
+  if((cp.inc.updatedAt||"") > (loc.updatedAt||"")) loc.updatedAt = cp.inc.updatedAt;
+  return loc;
+}
+async function applySyncPlan(plan, data, decisions, opts){
+  var now = new Date().toISOString();
+  var silent = !!(opts && opts.silent);
+  if(!silent){ try{ await idbPut("meta", {key:"preMerge", value:{at:now, text:serializeState()}}); }catch(e){} }
+  var touched = [];
+  plan.newCards.forEach(function(c){ var n = cloneJSON(c); CARDS.push(n); touched.push(n); });
+  plan.collisions.forEach(function(c){
+    var n = cloneJSON(c), ids = nextSeqAndId(n.period);
+    n.id = ids.id; n.no = ids.no; n.seq = ids.seq;
+    CARDS.push(n); touched.push(n);
+  });
+  plan.cardPlans.forEach(function(cp){ touched.push(applyCardPlan(cp, decisions, now, {noLog:silent})); });
+  plan.vocabAdds.forEach(function(a){ VOCAB[a.kind] = VOCAB[a.kind] || []; if(VOCAB[a.kind].indexOf(a.value)===-1) VOCAB[a.kind].push(a.value); });
+  if(plan.vocabAdds.length){
+    Object.keys(VOCAB).forEach(function(k){ if(Array.isArray(VOCAB[k]) && k!=="categories") VOCAB[k].sort(function(a,b){return a.localeCompare(b,'ko');}); });
+  }
+  if(data.vocab && data.vocab._trackStart && (!VOCAB._trackStart || data.vocab._trackStart < VOCAB._trackStart)) VOCAB._trackStart = data.vocab._trackStart;
+  plan.eventsAdds.forEach(function(e){ EVENTS.push(cloneJSON(e)); persistEvent(EVENTS[EVENTS.length-1]); });
+  seqCounter = Math.max(seqCounter, data.seqCounter||0, CARDS.reduce(function(m,c){return Math.max(m,c.seq||0);},0));
+  var nb = await importBlobs(data.blobs);
+  if(idb && canWrite){
+    touched.forEach(function(c){ idbPut("cards", c).catch(function(){}); });
+    idbPut("meta", {key:"vocab", value:VOCAB}).catch(function(){});
+    idbPut("meta", {key:"seqCounter", value:seqCounter}).catch(function(){});
+  }
+  refreshSnaps();
+  if(!silent) markSynced("import");
+  return {cards:touched.length, blobs:nb, touched:touched};
+}
+function collectAttachmentRefs(){
+  var refs = {};
+  var re = /\[\[img:([\w-]+)(?:\|([^\]]+))?\]\]/g, m;
+  var text = JSON.stringify(CARDS);
+  while((m = re.exec(text))){ if(!refs[m[1]]) refs[m[1]] = {rel:m[2]||"", name:"", type:""}; }
+  CARDS.forEach(function(c){
+    (c.images||[]).concat(c.files||[]).forEach(function(e){
+      if(!e || !e.id) return;
+      refs[e.id] = {rel:e.file||(refs[e.id]&&refs[e.id].rel)||"", name:e.name||(refs[e.id]&&refs[e.id].name)||"", type:e.contentType||(refs[e.id]&&refs[e.id].type)||""};
+    });
+  });
+  return refs;
+}
+async function getAttachmentBlob(id, rel){
+  try{ if(blobUrlCache[id]){ var r = await fetch(blobUrlCache[id]); return await r.blob(); } }catch(e){}
+  return null;
+}
+function blobToB64(blob){
+  return new Promise(function(res, rej){
+    var fr = new FileReader();
+    fr.onload = function(){ res(String(fr.result).split(",")[1]||""); };
+    fr.onerror = function(){ rej(fr.error); };
+    fr.readAsDataURL(blob);
+  });
+}
+async function buildSyncFileText(includeBlobs){
+  var blobs = [];
+  if(includeBlobs){
+    var refs = collectAttachmentRefs();
+    var ids = Object.keys(refs);
+    for(var i=0;i<ids.length;i++){
+      var r = refs[ids[i]], blob = await getAttachmentBlob(ids[i], r.rel);
+      if(!blob) continue;
+      blobs.push({id:ids[i], name:r.name||(ids[i]+".bin"), type:r.type||blob.type||"", b64:await blobToB64(blob)});
+    }
+  }
+  return JSON.stringify({type:"smartjob-sync", version:2, exportedAt:new Date().toISOString(), cards:CARDS, vocab:VOCAB, events:EVENTS, seqCounter:seqCounter, blobs:blobs});
+}
+function downloadText(name, text){
+  var blob = new Blob([text], {type:"application/json"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 3000);
+  return blob.size;
+}
+function renderSyncPreview(plan, data, box){
+  if(planIsEmpty(plan)){
+    box.innerHTML = '<div class="note" style="margin-top:8px">합칠 내용이 없습니다. 이미 최신 상태입니다.</div>';
+    markSynced("import");
+    var st = document.getElementById("sync-status"); if(st) st.textContent = syncStatusText();
+    return;
+  }
+  var h = '<div style="margin-top:10px"><b>합치기 미리보기</b> <span class="hint">('+esc(fmtTs(data.exportedAt))+'에 만든 파일)</span></div><ul class="sync-sum">';
+  if(plan.newCards.length) h += '<li>새 카드 <b>'+plan.newCards.length+'</b>개 추가: '+esc(plan.newCards.slice(0,6).map(function(c){return c.title;}).join(", "))+(plan.newCards.length>6?" 외":"")+'</li>';
+  if(plan.collisions.length) h += '<li>번호가 겹치는 새 카드 <b>'+plan.collisions.length+'</b>개 → 새 번호를 붙여 추가: '+esc(plan.collisions.map(function(c){return c.title;}).join(", "))+'</li>';
+  var takeCnt = plan.cardPlans.reduce(function(n,cp){return n+cp.takes.length;},0);
+  var confCnt = plan.cardPlans.reduce(function(n,cp){return n+cp.conflicts.length;},0);
+  if(takeCnt) h += '<li>상대가 고친 항목 <b>'+takeCnt+'</b>건 가져오기</li>';
+  if(confCnt) h += '<li class="conf">양쪽에서 따로 고친 항목 <b>'+confCnt+'</b>건 (아래에서 선택)</li>';
+  if(plan.doneChanges) h += '<li>처리 완료 체크 <b>'+plan.doneChanges+'</b>개 카드에서 합치기</li>';
+  if(plan.blobCount) h += '<li>이미지·첨부파일 <b>'+plan.blobCount+'</b>개 포함</li>';
+  if(plan.vocabAdds.length) h += '<li>목록 항목(담당자·부서·법령 등) <b>'+plan.vocabAdds.length+'</b>개 추가</li>';
+  if(plan.eventsAdds.length) h += '<li>연간 주요 일정 <b>'+plan.eventsAdds.length+'</b>건 추가</li>';
+  h += '</ul>';
+  var lines = [], shown = 0, hidden = 0;
+  plan.cardPlans.forEach(function(cp){
+    cp.takes.forEach(function(t){
+      if(shown>=60){ hidden++; return; }
+      shown++;
+      lines.push('<div class="sync-line"><b>'+esc(cp.card.no)+' '+esc(cp.card.title)+'</b> · '+esc(fieldLabel(t.k))+': <span class="from">'+esc(truncVal(t.from))+'</span> → <span class="to">'+esc(truncVal(t.to))+'</span></div>');
+    });
+  });
+  if(lines.length) h += '<div class="sync-lines">'+lines.join("")+(hidden?'<div class="hint">…외 '+hidden+'건</div>':'')+'</div>';
+  var ci = 0;
+  var confHtml = "";
+  plan.cardPlans.forEach(function(cp){
+    cp.conflicts.forEach(function(c){
+      var nm = 'sc_'+(ci++);
+      confHtml += '<div class="sync-conf" data-sc-card="'+esc(cp.card.id)+'" data-sc-field="'+esc(c.k)+'">'+
+        '<div><b>'+esc(cp.card.no)+' '+esc(cp.card.title)+'</b> · '+esc(fieldLabel(c.k))+'</div>'+
+        '<label><input type="radio" name="'+nm+'" value="local"'+(c.winner==="local"?' checked':'')+'> 내 것'+(c.winner==="local"?' (더 최근)':'')+': '+esc(truncVal(c.lv))+'</label>'+
+        '<label><input type="radio" name="'+nm+'" value="inc"'+(c.winner==="inc"?' checked':'')+'> 상대 것'+(c.winner==="inc"?' (더 최근)':'')+': '+esc(truncVal(c.iv))+'</label>'+
+      '</div>';
+    });
+  });
+  if(confHtml) h += '<div class="sync-conflicts"><b>⚠ 충돌 — 어느 쪽 내용을 쓸지 고르세요</b>'+confHtml+'</div>';
+  h += '<div style="display:flex;gap:8px;margin-top:10px"><button type="button" class="btn btn-primary btn-sm" id="sync-apply">합치기 실행</button><button type="button" class="btn btn-sm" id="sync-cancel">취소</button></div>';
+  box.innerHTML = h;
+  document.getElementById("sync-cancel").addEventListener("click", function(){ box.innerHTML = ""; });
+  document.getElementById("sync-apply").addEventListener("click", async function(){
+    var decisions = {};
+    box.querySelectorAll(".sync-conf").forEach(function(el){
+      var r = el.querySelector("input[type=radio]:checked");
+      if(r) decisions[el.getAttribute("data-sc-card")+"|"+el.getAttribute("data-sc-field")] = r.value;
+    });
+    var res = await applySyncPlan(plan, data, decisions);
+    showToast("합치기 완료 — 카드 "+res.cards+"개 반영"+(res.blobs?", 파일 "+res.blobs+"개 추가":""));
+    closeBackupModal();
+    route();
+  });
+}
+async function undoLastMerge(){
+  var rec = await idbGet("meta","preMerge").catch(function(){return null;});
+  if(!rec || !rec.value){ showToast("되돌릴 합치기 기록이 없습니다"); return; }
+  var ok = await restoreFromText(rec.value.text, "합치기 이전 상태");
+  if(ok){ try{ await idbDel("meta","preMerge"); }catch(e){} closeBackupModal(); }
+}
+
+function closeBackupModal(){ var o = document.getElementById("backup-overlay"); if(o){ o.remove(); if(!editMode) route(); } }
+async function openBackupModal(){
+  closeBackupModal();
+  var ov = document.createElement("div");
+  ov.className = "log-overlay"; ov.id = "backup-overlay";
+  ov.innerHTML = '<div class="log-panel" style="max-width:760px"><h3>💾 백업 · 🔄 동기화</h3><div id="backup-body" class="body"></div>'+
+    '<button class="btn" id="backup-close" style="margin-top:12px">닫기</button></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", function(e){ if(e.target===ov) closeBackupModal(); });
+  document.getElementById("backup-close").addEventListener("click", closeBackupModal);
+  var body = document.getElementById("backup-body");
+
+  var html = '<div class="sync-box">'+
+    '<div style="font-weight:700;margin-bottom:4px">🔄 두 컴퓨터 동기화</div>'+
+    '<div class="hint" style="margin-bottom:8px">각 컴퓨터에서 따로 고친 뒤 파일 1개를 웹하드·메신저·USB 등으로 옮겨 서로 합칩니다. 서로 고친 <b>항목만</b> 합쳐지고, 한쪽만 고친 항목은 그대로 가져옵니다.</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+      '<label style="display:flex;align-items:center;gap:5px;font-size:12.5px"><input type="checkbox" id="sync-incl" checked> 이미지·첨부파일 포함</label>'+
+      '<button type="button" class="btn btn-sm btn-primary" id="sync-export">⬇ 동기화 파일 만들기</button>'+
+      '<label class="btn btn-sm">⬆ 상대 파일 가져와 합치기<input type="file" id="sync-import" accept=".json,application/json" style="display:none"></label>'+
+      '<button type="button" class="btn btn-sm" id="sync-undo" hidden>↩ 직전 합치기 되돌리기</button>'+
+    '</div>'+
+    '<div id="sync-status" class="hint" style="margin-top:6px">'+esc(syncStatusText())+'</div>'+
+    '<div id="sync-preview"></div>'+
+  '</div><hr style="border:none;border-top:1px solid var(--border);margin:12px 0">';
+  html += '<p><b>자동 백업</b>: 하루 1개(그날 처음 연 시점의 상태)가 이 컴퓨터의 브라우저 안에 자동 보관되며 최근 '+BACKUP_KEEP_DAYS+'일치만 남습니다. 브라우저 저장소를 지우면 함께 사라지므로, 중요한 시점에는 아래 <b>백업 파일 내려받기</b>로 따로 보관하세요.</p>'+
+    '<div style="margin:8px 0"><button type="button" class="btn btn-sm btn-primary" id="bk-now">지금 백업 만들기</button></div>'+
+    '<div id="bk-list" class="hint">백업 목록을 불러오는 중…</div>';
+  html += '<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button type="button" class="btn btn-sm" id="bk-download">⬇ 백업 파일 내려받기(.json)</button>'+
+      '<label class="btn btn-sm">⬆ 백업 파일 불러와 복원<input type="file" id="bk-upload" accept=".json,application/json" style="display:none"></label>'+
+    '</div>'+
+    '<div class="hint" style="margin-top:8px">복원하면 현재 데이터가 백업 시점의 내용으로 바뀝니다. 복원 직전 상태는 백업 목록에 <code>before_restore_…</code>로 자동 보관되어 되돌릴 수 있습니다.</div>';
+  body.innerHTML = html;
+
+  document.getElementById("sync-export").addEventListener("click", async function(){
+    var btn = document.getElementById("sync-export");
+    btn.disabled = true; btn.textContent = "만드는 중…";
+    try{
+      var text = await buildSyncFileText(document.getElementById("sync-incl").checked);
+      var d = new Date();
+      var size = downloadText("smartjob_sync_"+localDateStr(d)+"_"+pad2(d.getHours())+pad2(d.getMinutes())+".json", text);
+      markSynced("export");
+      var st = document.getElementById("sync-status"); if(st) st.textContent = syncStatusText();
+      showToast("동기화 파일을 만들었습니다 ("+fmtSize(size)+")");
+    }catch(e){ showToast("⚠ 동기화 파일 만들기에 실패했습니다"); }
+    btn.disabled = false; btn.textContent = "⬇ 동기화 파일 만들기";
+  });
+  document.getElementById("sync-import").addEventListener("change", async function(e){
+    var f = e.target.files && e.target.files[0];
+    var box = document.getElementById("sync-preview");
+    if(!f) return;
+    var data;
+    try{ data = JSON.parse(await f.text()); }catch(err){ box.innerHTML = '<div class="note">파일을 읽을 수 없습니다.</div>'; return; }
+    if(!data || !Array.isArray(data.cards)){ box.innerHTML = '<div class="note">동기화 파일이 아닙니다.</div>'; return; }
+    renderSyncPreview(buildSyncPlan(data), data, box);
+    e.target.value = "";
+  });
+  idbGet("meta","preMerge").then(function(rec){
+    var u = document.getElementById("sync-undo");
+    if(!u || !rec || !rec.value) return;
+    u.hidden = false;
+    u.title = fmtTs(rec.value.at)+"에 합치기 전 상태로 되돌립니다 (그 이후에 고친 내용도 사라집니다)";
+    var armed = false;
+    u.addEventListener("click", function(){
+      if(!armed){ armed = true; u.textContent = "정말 되돌릴까요? (한 번 더 클릭)"; u.classList.add("btn-danger"); return; }
+      undoLastMerge();
+    });
+  }).catch(function(){});
+  document.getElementById("bk-download").addEventListener("click", function(){
+    var blob = new Blob([serializeState()], {type:"application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "smartjob_backup_"+localDateStr()+".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+  });
+  var up = document.getElementById("bk-upload");
+  up.addEventListener("change", function(){
+    var f = up.files && up.files[0];
+    if(!f) return;
+    f.text().then(function(t){ return restoreFromText(t, f.name); }).then(function(ok){ if(ok) closeBackupModal(); });
+  });
+
+  document.getElementById("bk-now").addEventListener("click", async function(){
+    try{
+      var d = new Date();
+      await addBackup("smartjob_backup_"+localDateStr(d)+"_"+pad2(d.getHours())+pad2(d.getMinutes())+pad2(d.getSeconds())+"_수동", serializeState());
+      showToast("백업을 만들었습니다");
+      fillBackupList();
+    }catch(e){ showToast("⚠ 백업 저장 실패"); }
+  });
+  fillBackupList();
+}
+async function fillBackupList(){
+  var box = document.getElementById("bk-list");
+  if(!box) return;
+  var items = [];
+  try{ items = await listBackups(); }catch(e){ box.textContent = "백업 목록을 불러오지 못했습니다"; return; }
+  if(!items.length){ box.textContent = "아직 백업이 없습니다"; return; }
+  box.className = "";
+  box.innerHTML = items.map(function(it){
+    return '<div class="backup-row"><span class="nm">'+esc(it.name)+'</span><span class="sz">'+esc(fmtSize(it.size))+'</span>'+
+      '<button type="button" class="btn btn-sm" data-bk-restore="'+esc(it.name)+'">복원</button></div>';
+  }).join("");
+  box.querySelectorAll("[data-bk-restore]").forEach(function(b){
+    var armed = false;
+    b.addEventListener("click", async function(){
+      if(!armed){ armed = true; b.textContent = "정말 복원?"; b.classList.add("btn-danger"); return; }
+      try{
+        var nm = b.getAttribute("data-bk-restore");
+        var rec = (await loadBackupList()).filter(function(x){ return x.name===nm; })[0];
+        if(!rec) throw new Error("none");
+        var ok = await restoreFromText(rec.text, nm);
+        if(ok) closeBackupModal();
+      }catch(e){ showToast("⚠ 복원에 실패했습니다"); }
+    });
+  });
+}
+window.addEventListener("beforeprint", function(){
+  document.querySelectorAll(".print-stamp").forEach(function(el){ el.textContent = "출력일시: "+fmtTs(new Date().toISOString()); });
+});
+
+function resolveAttachmentUrl(bid, relPath){
+  if(!blobUrlCache[bid]) cloudFetchBlob(bid);
+  return blobUrlCache[bid] || "";
+}
+/* Store a new upload (image or file). Writes to the shared folder when
+   connected (recording a "file" path so any PC can fetch it later), and
+   always also caches an instant local object URL + local IndexedDB blob
+   so this computer can use it immediately even before the write finishes. */
+function storeAttachment(bid, file){
+  var url = URL.createObjectURL(file);
+  blobUrlCache[bid] = url;
+  var entry = {id:bid};
+  if(idb){
+    idbPut("blobs", {id:bid, blob:file, name:file.name, contentType:file.type, sizeBytes:file.size}).catch(function(){});
+  }
+  return entry;
+}
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m];}); }
+/* text may contain [[img:ID]] tokens inserted via clipboard paste; render them as inline images from the local blob store */
+function renderRich(s){
+  var out = esc(s).replace(/\[\[img:([\w-]+)(?:\|([^\]]+))?\]\]/g, function(m, bid, relPath){
+    var url = resolveAttachmentUrl(bid, relPath);
+    return url ? '<img src="'+url+'" alt="첨부 이미지">' : '<span style="color:var(--fg-faint)">[이미지 불러오는 중…]</span>';
+  });
+  return out.replace(/\n/g,"<br>");
+}
+function nl2br(s){ return renderRich(s); }
+function tokenize(s){ return String(s||"").split(/[\/,·]/).map(function(t){return t.trim();}).filter(Boolean); }
+function uid(){ return 'x'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+function fmtTs(ts){ try{ return new Date(ts).toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ts; } }
+function fmtSize(n){ if(n==null) return ""; if(n<1024) return n+" B"; if(n<1024*1024) return (n/1024).toFixed(1)+" KB"; return (n/1024/1024).toFixed(1)+" MB"; }
+
+function byId(id){ return CARDS.find(function(c){return c.id===id;}); }
+
+/* Doc ids are stored in the shared database, whose keys must be ASCII
+   (letters/digits/._-~:@+) — Korean text is not a valid doc id. So the
+   internal id is always "card-###" (ASCII), while the human-facing "no"
+   label (e.g. "[월-101]") is a separate display-only field. */
+/* A persistent counter (not just "max seq in CARDS") so that clicking
+   "+ 새 카드" more than once before saving never hands out the same
+   number twice, and numbering survives reloads/deletions correctly. */
+var seqCounter = 0;
+function nextSeqAndId(period){
+  var maxSeq = CARDS.reduce(function(m,c){return Math.max(m,c.seq||0);},0);
+  if(seqCounter < maxSeq) seqCounter = maxSeq;
+  seqCounter += 1;
+  var seq = seqCounter;
+  if(idb && canWrite){ idbPut("meta", {key:"seqCounter", value:seqCounter}).catch(function(){}); }
+  var code = PERIOD_CODE[period] || "수시";
+  var id = "card-"+String(seq).padStart(3,"0");
+  return {seq:seq, id:id, no:"["+code+"-"+String(seq).padStart(3,"0")+"]"};
+}
+
+function blankCard(){
+  var pid = nextSeqAndId("수시");
+  var checks = {};
+  CHECK_OPTIONS.forEach(function(o){ checks[o.key]=false; });
+  return {
+    id: pid.id, no: pid.no, seq: pid.seq, cid: uid(),
+    category: (VOCAB.categories[0]||""), owner:"", dept:"", title:"새 업무카드",
+    importance:0, duration:"", period:"수시", kpi:"해당없음",
+    keywords:"", purpose:"",
+    result_checks: checks, result_etc:"",
+    flow:"", detail_steps:[],
+    submit_dest:"", submit_way:"", submit_deadline:"", submit_attach:"", submit_storage:"", submit_law:"",
+    submit_visible:{dest:true,way:true,deadline:true,attach:true,storage:true,law:true},
+    schedule:"", caution:"", reference:"",
+    schedule_rule: blankRule(),
+    images:[], files:[],
+    sectionOrder: DEFAULT_ORDER.slice(),
+    logs:[{ts:new Date().toISOString(), summary:"카드 생성"}],
+    updatedAt: new Date().toISOString()
+  };
+}
+
+/* ---------- persistence (fully offline: IndexedDB in this browser only, no server) ---------- */
+var DB_NAME = "obong_smartjob_db", DB_VERSION = 1;
+function openDB(){
+  return new Promise(function(resolve, reject){
+    if(!window.indexedDB){ reject(new Error("no indexeddb")); return; }
+    var req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = function(e){
+      var d = e.target.result;
+      if(!d.objectStoreNames.contains("cards")) d.createObjectStore("cards", {keyPath:"id"});
+      if(!d.objectStoreNames.contains("meta")) d.createObjectStore("meta", {keyPath:"key"});
+      if(!d.objectStoreNames.contains("events")) d.createObjectStore("events", {keyPath:"id"});
+      if(!d.objectStoreNames.contains("blobs")) d.createObjectStore("blobs", {keyPath:"id"});
+    };
+    req.onsuccess = function(e){ resolve(e.target.result); };
+    req.onerror = function(){ reject(req.error); };
+  });
+}
+function idbStore(name, mode){ return idb.transaction(name, mode||"readonly").objectStore(name); }
+function idbAll(name){ return new Promise(function(res,rej){ var r=idbStore(name).getAll(); r.onsuccess=function(){res(r.result);}; r.onerror=function(){rej(r.error);}; }); }
+function idbGet(name,key){ return new Promise(function(res,rej){ var r=idbStore(name).get(key); r.onsuccess=function(){res(r.result);}; r.onerror=function(){rej(r.error);}; }); }
+function idbPut(name,val){ return new Promise(function(res,rej){ var r=idbStore(name,"readwrite").put(val); r.onsuccess=function(){ cloudHook("put",name,val); res();}; r.onerror=function(){rej(r.error);}; }); }
+function idbDel(name,key){ return new Promise(function(res,rej){ var r=idbStore(name,"readwrite").delete(key); r.onsuccess=function(){ cloudHook("del",name,key); res();}; r.onerror=function(){rej(r.error);}; }); }
+
+/* ---------- 항목별 수정 기록 (두 컴퓨터 동기화용) ----------
+   card.fts[필드] = {t:수정시각, b:[이전 수정시각들]} — "이 값이 어떤 버전에서 이어진 수정인지"를 남겨서,
+   파일로 합칠 때 (1) 한쪽만 고친 항목은 그대로 가져오고 (2) 양쪽이 각자 고친 항목만 충돌로 표시합니다. */
+var SYNC_SKIP = {id:1,no:1,seq:1,cid:1,logs:1,updatedAt:1,fts:1,done:1};
+var fieldSnap = {};
+function snapCard(c){
+  var o = {};
+  Object.keys(c).forEach(function(k){ if(!SYNC_SKIP[k]) o[k] = JSON.stringify(c[k]); });
+  fieldSnap[c.id] = o;
+}
+function refreshSnaps(){ fieldSnap = {}; (CARDS||[]).forEach(snapCard); }
+function stampFieldChanges(card){
+  var old = fieldSnap[card.id];
+  if(old){
+    var now = new Date().toISOString();
+    card.fts = card.fts || {};
+    function mark(k){
+      var prev = card.fts[k], pt = prev ? (prev.t||"") : "", pb = (prev && prev.b) ? prev.b : [];
+      card.fts[k] = {t:now, b:[pt].concat(pb).slice(0,20)};
+    }
+    Object.keys(card).forEach(function(k){ if(!SYNC_SKIP[k] && JSON.stringify(card[k])!==old[k]) mark(k); });
+    Object.keys(old).forEach(function(k){ if(!(k in card)) mark(k); });
+  }
+  snapCard(card);
+}
+
+function persistCard(card, summary, details){
+  stampFieldChanges(card);
+  card.updatedAt = new Date().toISOString();
+  card.logs = (card.logs||[]).concat([{ts:card.updatedAt, summary:summary, details:details||[]}]).slice(-40);
+  if(idb && canWrite){
+    idbPut("cards", card).catch(function(){ showToast("저장 실패 — 브라우저 저장소를 확인해 주세요"); });
+  }
+  return card;
+}
+function deleteCardRemote(id){
+  if(idb && canWrite){ idbDel("cards", id).catch(function(){}); }
+}
+function persistVocab(){
+  if(idb && canWrite){ idbPut("meta", {key:"vocab", value:VOCAB}).catch(function(){}); }
+}
+function addVocab(kind, val){
+  if(!val) return;
+  val = val.trim();
+  if(!val) return;
+  if(!VOCAB[kind]) VOCAB[kind] = [];
+  if(VOCAB[kind].indexOf(val)===-1){ VOCAB[kind].push(val); VOCAB[kind].sort(function(a,b){return a.localeCompare(b,'ko');}); persistVocab(); }
+}
+function addVocabMulti(kind, raw){ tokenize(raw).forEach(function(t){ addVocab(kind, t); }); }
+function persistEvent(ev){ if(idb && canWrite){ idbPut("events", ev).catch(function(){}); } }
+function deleteEventRemote(id){ if(idb && canWrite){ idbDel("events", id).catch(function(){}); } }
+
+/* ---------- state ---------- */
+var state = { q:"", cat:"전체", period:"전체", kpi:"전체", owner:"전체", dept:"전체", law:"전체", sortKey:"seq", sortDir:1 };
+
+/* 검색 대상: 업무명·번호·담당자·부서·키워드 + 본문(목적·절차·상세처리·제출정보·관련법령·주의·참고 등) */
+function stripImgTokens(s){ return String(s||"").replace(/\[\[img:[^\]]*\]\]/g," "); }
+function bodyFields(r){
+  return [
+    ["업무 목적", r.purpose], ["업무 처리 절차", r.flow],
+    ["상세 처리 방법", (r.detail_steps||[]).map(stripImgTokens).join(" ")],
+    ["제출처", r.submit_dest], ["제출방법", r.submit_way], ["제출기한", r.submit_deadline],
+    ["첨부서류", r.submit_attach], ["보관방법", r.submit_storage], ["관련법령", r.submit_law],
+    ["업무 일정 기준", r.schedule], ["주의사항", stripImgTokens(r.caution)], ["참고자료", stripImgTokens(r.reference)],
+    ["결과처리 기타", r.result_etc]
+  ];
+}
+function splitLaws(s){ return String(s||"").split(/[;,\/·\n]/).map(function(t){return t.trim();}).filter(Boolean); }
+function matchSnippet(r, q){
+  var lq = q.toLowerCase(), fs = bodyFields(r);
+  for(var i=0;i<fs.length;i++){
+    var txt = String(fs[i][1]||"").replace(/\s+/g," ");
+    var at = txt.toLowerCase().indexOf(lq);
+    if(at!==-1){
+      var from = Math.max(0, at-18), to = Math.min(txt.length, at+q.length+30);
+      return {label:fs[i][0], pre:(from>0?"…":"")+txt.slice(from,at), hit:txt.slice(at,at+q.length), post:txt.slice(at+q.length,to)+(to<txt.length?"…":"")};
+    }
+  }
+  return null;
+}
+
+function allRows(){ return CARDS.filter(function(c){ return !c.deleted; }); }
+
+function filteredRows(){
+  var rows = allRows().slice();
+  if(state.cat!=="전체") rows = rows.filter(function(r){return r.category===state.cat;});
+  if(state.period!=="전체") rows = rows.filter(function(r){return r.period===state.period;});
+  if(state.kpi!=="전체") rows = rows.filter(function(r){return r.kpi===state.kpi;});
+  if(state.owner!=="전체") rows = rows.filter(function(r){return tokenize(r.owner).indexOf(state.owner)!==-1;});
+  if(state.dept!=="전체") rows = rows.filter(function(r){return tokenize(r.dept).indexOf(state.dept)!==-1;});
+  if(state.law!=="전체") rows = rows.filter(function(r){return splitLaws(r.submit_law).indexOf(state.law)!==-1;});
+  if(state.q.trim()){
+    var q = state.q.trim().toLowerCase();
+    rows = rows.filter(function(r){
+      var hay = [r.title,r.owner,r.dept,r.keywords,r.no].concat(bodyFields(r).map(function(f){return f[1];})).join(" ").toLowerCase();
+      return hay.indexOf(q)!==-1;
+    });
+  }
+  rows.sort(function(a,b){
+    var k = state.sortKey, d = state.sortDir;
+    var av = a[k], bv = b[k];
+    if(typeof av==="number" && typeof bv==="number") return (av-bv)*d;
+    av = String(av==null?"":av); bv = String(bv==null?"":bv);
+    return av.localeCompare(bv,"ko")*d;
+  });
+  return rows;
+}
+
+/* ---------- routing ---------- */
+/* ---------- 폰 하단 탭바 + 더보기 시트 ---------- */
+function updateTabbar(){
+  var tb = document.getElementById("tabbar");
+  if(!tb) return;
+  var h = location.hash.replace(/^#\/?/,"");
+  var cur = h==="plan" ? "plan" : h==="today" ? "today" : (h==="trash" ? "more" : "toc");
+  var n = todayAlertCount();
+  var remind = !!syncRemindHtml();
+  function tab(id, ic, label, extra){
+    return '<button type="button" data-tab="'+id+'" class="'+(cur===id?"active":"")+'"><span class="ic">'+ic+'</span>'+label+(extra||"")+'</button>';
+  }
+  tb.innerHTML = tab("toc","🔍","업무카드")+
+    tab("today","📅","오늘 할 일", n?'<span class="tb-badge">'+n+'</span>':"")+
+    tab("plan","🗓","연간계획")+
+    tab("more","☰","더보기", remind?'<span class="tb-dot"></span>':"");
+  tb.querySelectorAll("[data-tab]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var id = b.getAttribute("data-tab");
+      if(id==="more") openMoreSheet(); else location.hash = id;
+    });
+  });
+}
+function closeMoreSheet(){ var o = document.getElementById("more-overlay"); if(o) o.remove(); }
+function openMoreSheet(){
+  closeMoreSheet();
+  var trashCount = (CARDS||[]).filter(function(c){return c.deleted;}).length;
+  var si = syncInfo(), remind = !!syncRemindHtml();
+  var ov = document.createElement("div");
+  ov.className = "log-overlay"; ov.id = "more-overlay";
+  function item(id, ic, label, sub){
+    return '<button type="button" class="more-item" data-more="'+id+'"><span class="ic">'+ic+'</span><span class="tx"><b>'+label+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</span></button>';
+  }
+  ov.innerHTML = '<div class="log-panel more-panel"><h3>더보기</h3>'+
+    item("new","➕","새 카드 만들기","")+
+    item("sync","🔄","동기화 · 백업", remind ? '⚠ 동기화가 필요합니다 (고친 카드 '+si.changed+'개)' : '다른 컴퓨터와 합치기, 백업·복원')+
+    item("trash","🗑","휴지통", trashCount?(trashCount+'개 보관 중'):'삭제한 카드 복구')+
+    item("export","📊","엑셀로 내보내기","업무카드 전체를 .xlsx로 저장")+
+    item("help","❓","도움말","")+
+    '<button class="btn" id="more-close" style="margin-top:10px;width:100%;justify-content:center">닫기</button></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", function(e){ if(e.target===ov) closeMoreSheet(); });
+  document.getElementById("more-close").addEventListener("click", closeMoreSheet);
+  ov.querySelectorAll("[data-more]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var id = b.getAttribute("data-more");
+      closeMoreSheet();
+      if(id==="new") location.hash = "card/new";
+      else if(id==="trash") location.hash = "trash";
+      else if(id==="sync") openBackupModal();
+      else if(id==="export") exportCSV();
+      else if(id==="help") openHelpModal("usage");
+    });
+  });
+}
+function route(){
+  var h = location.hash.replace(/^#\/?/,"");
+  var app = document.getElementById("app");
+  if(!CARDS){
+    app.innerHTML = '<div class="loading-state gutter"><div class="spinner"></div>업무카드 데이터를 불러오는 중입니다…</div>';
+    return;
+  }
+  if(h==="card/new"){
+    editMode = true; draft = blankCard();
+    renderCardShell(draft.id, true);
+  } else if(h.indexOf("card/")===0){
+    renderCard(decodeURIComponent(h.slice(5)));
+  } else if(h==="plan"){
+    renderPlan();
+  } else if(h==="trash"){
+    renderTrash();
+  } else if(h==="today"){
+    renderToday();
+  } else {
+    renderTOC();
+  }
+  updateTabbar();
+  window.scrollTo(0,0);
+}
+window.addEventListener("hashchange", route);
+
+function navBarHtml(active){
+  var trashCount = (CARDS||[]).filter(function(c){return c.deleted;}).length;
+  var alertN = todayAlertCount();
+  return '<div class="viewnav">'+
+    '<button type="button" class="btn'+(active==="toc"?" active":"")+'" data-goto="toc">업무카드 검색</button>'+
+    '<button type="button" class="btn'+(active==="plan"?" active":"")+'" data-goto="plan">연간업무계획</button>'+
+    '<button type="button" class="btn'+(active==="today"?" active":"")+'" data-goto="today" id="today-btn">📅 오늘 할 일'+(alertN?'<span class="nav-count">'+alertN+'</span>':'')+'</button>'+
+    '<button type="button" class="btn btn-sm" id="help-btn" title="도움말">❓ 도움말</button>'+
+    '<button type="button" class="btn btn-sm" id="backup-btn" title="백업 / 복원">💾 백업</button>'+
+    '<span style="flex:1"></span>'+
+    '<a class="btn btn-sm" href="#trash">🗑 휴지통'+(trashCount?(' ('+trashCount+')'):'')+'</a>'+
+    '<a class="btn btn-sm btn-primary" href="#card/new">+ 새 카드</a>'+
+    syncRemindHtml()+
+    '<span class="store-note'+(storageOk?"":" bad")+'">'+(storageOk?(canWrite?"● 이 컴퓨터에 자동 저장됨":"● 보기 전용"):"● 저장소 사용 불가(임시 세션)")+'</span>'+
+  '</div>';
+}
+function wireNavBar(root){
+  (root||document).querySelectorAll("[data-goto]").forEach(function(b){
+    b.addEventListener("click", function(){ location.hash = b.getAttribute("data-goto"); });
+  });
+  var syncBtn = (root||document).querySelector("#sync-remind");
+  if(syncBtn) syncBtn.addEventListener("click", function(){ openBackupModal(); });
+  var helpBtn = (root||document).querySelector("#help-btn");
+  if(helpBtn) helpBtn.addEventListener("click", function(){ openHelpModal("usage"); });
+  var bkBtn = (root||document).querySelector("#backup-btn");
+  if(bkBtn) bkBtn.addEventListener("click", function(){ openBackupModal(); });
+}
+
+/* ---------- help modal ---------- */
+var HELP_HTML = {
+  usage:
+    '<h3>📱 이 프로그램은 무엇인가요?</h3>'+
+    '<p>오봉관리역 서무 업무(공문·보고·점검·교육 등 120여 개 업무카드)를 검색하고, 연간업무계획으로 한눈에 관리하는 <b>오프라인 전용</b> 프로그램입니다. 인터넷 연결 없이, 파일 하나(HTML)로 바로 실행됩니다.</p>'+
+    '<div class="tip">권장 브라우저: Chrome 또는 Edge (최신 버전)</div>'+
+
+    '<h3>🔍 업무카드 검색</h3>'+
+    '<ul>'+
+      '<li>검색창은 업무명·담당자·키워드뿐 아니라 <b>본문(업무 목적·처리 절차·상세 처리 방법·제출정보·관련법령·주의사항·참고자료)까지</b> 찾습니다. 본문에서만 일치한 카드는 업무명 아래에 일치한 부분이 표시됩니다.</li>'+
+      '<li>상단 드롭다운(주기/성과지표/담당자/관련부서/<b>관련법령</b>)으로 좁혀 볼 수 있습니다. 관련법령에서 법령을 고르면 그 법령이 걸린 업무카드만 모아 볼 수 있습니다.</li>'+
+      '<li>표의 열 제목을 클릭하면 그 기준으로 정렬됩니다. 행을 클릭하면 상세화면으로 이동합니다.</li>'+
+    '</ul>'+
+
+    '<h3>✏️ 업무카드 보기 · 수정</h3>'+
+    '<ul>'+
+      '<li>"수정" 버튼으로 모든 항목을 편집하고, "저장"을 누르면 즉시 반영됩니다.</li>'+
+      '<li>"+ 새 카드"로 새 업무카드를 만들 수 있습니다 — 연번호는 자동으로 매겨지며 중복되지 않습니다.</li>'+
+      '<li><b>이미지 붙여넣기</b>: 글 작성란 안에서 캡처·복사한 이미지를 그대로 <code>Ctrl+V</code> 하면 본문에 바로 삽입됩니다.</li>'+
+      '<li><b>파일/이미지 첨부</b>: "+ 이미지 추가" / "+ 파일 추가" 버튼으로 사진·문서를 첨부하고, 이후 클릭해서 다운로드할 수 있습니다.</li>'+
+    '</ul>'+
+
+    '<h3>📅 업무 일정 기준 &amp; 연간업무계획</h3>'+
+    '<p>업무카드의 "업무 일정 기준"에서 (목록선택형)과 (일자선택형)을 섞어 다양한 반복 주기를 지정할 수 있습니다.<br>예) 분기익월 5일까지 · 매월 25일 · 매월 4일 · 분기 말일까지 · 매월 초까지 · 반기 말달까지 · 특정 월(6월,12월 등) 복수 선택</p>'+
+    '<p>여기서 설정한 내용은 <b>연간업무계획</b> 화면(분류×1~12월 표)에 자동 반영됩니다. 계획표의 칩을 클릭하면 해당 카드로 바로 이동합니다(양방향 연동).</p>'+
+
+    '<h3>📅 오늘 할 일 &amp; 처리 완료 체크</h3>'+
+    '<ul>'+
+      '<li>상단 <b>"📅 오늘 할 일"</b> 버튼: 각 카드의 업무 일정 기준(주기·일자)으로 <b>지연 · 오늘 · 이번 주 · 이번 달 남은 일정</b>을 자동으로 모아 보여줍니다. 빨간 숫자는 지연+오늘 마감 건수입니다.</li>'+
+      '<li>줄 앞의 체크박스를 누르면 그 달 업무가 <b>처리 완료</b>로 기록됩니다. 카드 화면 아래 <b>"처리 이력"</b>에서 월별로 확인하고 메모(공문번호 등)를 남길 수 있습니다.</li>'+
+      '<li>업무카드 검색 목록의 업무명 옆에 <b>지연 / 오늘 / D-n</b> 표시가 뜨고, 연간업무계획에서는 완료한 칩에 ✓가 표시됩니다.</li>'+
+      '<li>지연 판정은 이 기능을 처음 연 달의 1일부터 시작합니다. 수시 업무는 일정이 없어 표시되지 않습니다.</li>'+
+    '</ul>'+
+
+    '<h3>🖨 카드 인쇄 / PDF 저장</h3>'+
+    '<p>카드 화면 위쪽의 <b>"🖨 인쇄/PDF"</b> 버튼을 누르면 A4 기준으로 깔끔하게 인쇄됩니다. 인쇄 창에서 대상을 "PDF로 저장"으로 고르면 PDF 파일이 됩니다. 이력·버튼류는 인쇄되지 않습니다.</p>'+
+
+    '<h3>💾 백업 / 복원</h3>'+
+    '<ul>'+
+      '<li>하루 1번(그날 처음 연 시점의 상태) 이 컴퓨터 안에 <b>자동 백업</b>되고 최근 14일치가 보관됩니다. 브라우저 저장소를 지우면 함께 사라지니, 중요한 시점에는 파일로도 내려받아 두세요.</li>'+
+      '<li>상단 <b>"💾 백업"</b> 버튼에서 지금 백업 만들기, 백업 파일 내려받기, 백업 목록에서 복원, 백업 파일 불러와 복원을 할 수 있습니다.</li>'+
+      '<li>복원 직전 상태는 백업 목록에 <code>before_restore_…</code>로 자동 보관되어, 잘못 복원해도 되돌릴 수 있습니다.</li>'+
+    '</ul>'+
+
+    '<h3>🔄 두 컴퓨터 동기화</h3>'+
+    '<ol>'+
+      '<li>컴퓨터 A에서 <b>"💾 백업"</b> → <b>"동기화 파일 만들기"</b>로 파일을 내려받습니다. (이미지·첨부 포함은 체크박스로 선택)</li>'+
+      '<li>그 파일을 USB·메일·메신저 등 허용된 방법으로 컴퓨터 B에 옮깁니다.</li>'+
+      '<li>B에서 같은 창의 <b>"동기화 파일 가져오기"</b>로 파일을 고르면 <b>합치기 미리보기</b>가 나옵니다. 어떤 카드의 어떤 항목이 바뀌는지 확인하고 <b>"합치기 실행"</b>을 누르세요.</li>'+
+      '<li>B에서도 파일을 만들어 A에서 가져오면 양쪽이 같아집니다.</li>'+
+    '</ol>'+
+    '<ul>'+
+      '<li>카드 전체가 아니라 <b>항목(업무명, 주의사항, 제출기한 등) 단위</b>로 합쳐집니다. 서로 다른 항목을 고쳤다면 둘 다 살아납니다.</li>'+
+      '<li>같은 항목을 양쪽에서 따로 고친 경우만 "충돌"로 표시되며, 기본은 더 최근 값이고 미리보기에서 항목별로 바꿀 수 있습니다.</li>'+
+      '<li>처리 완료 체크와 변경 이력은 양쪽 것이 합쳐지고, 새로 만든 카드는 번호가 겹쳐도 새 번호를 받아 추가됩니다.</li>'+
+      '<li>잘못 합쳤다면 같은 창의 <b>"직전 합치기 되돌리기"</b>로 직전 상태로 돌아갑니다. 같은 파일을 다시 가져와도 안전합니다.</li>'+
+      '<li><b>동기화 알림</b>: 마지막 동기화 후 7일이 지났고 고친 카드가 있으면 상단에 "🔄 마지막 동기화 N일 전 · 고친 카드 N개" 버튼이 나타납니다. 누르면 동기화 창이 열립니다.</li>'+
+      '<li>주의: 두 컴퓨터의 시계가 크게 다르면 "더 최근"이 어긋날 수 있고, 영구 삭제한 카드는 전달되지 않으니 삭제는 휴지통을 쓰세요. 처리 방법(단계)은 한 덩어리로 취급됩니다.</li>'+
+    '</ul>'+
+
+    '<h3>📱 핸드폰에서 사용하기</h3>'+
+    '<ul>'+
+      '<li>화면 폭이 좁으면 자동으로 <b>폰 화면</b>으로 바뀝니다. 아래 탭바에서 <b>업무카드 · 오늘 할 일 · 연간계획 · 더보기</b>를 오갑니다.</li>'+
+      '<li>업무카드 목록은 카드 형태로 보이고, <b>⚙ 필터</b>를 누르면 주기·성과지표·담당자·부서·법령 필터가 펼쳐집니다.</li>'+
+      '<li>연간계획은 위쪽 <b>월 버튼</b>으로 한 달씩 봅니다. 새 카드·휴지통·백업/동기화·엑셀·도움말은 <b>더보기</b>에 있습니다.</li>'+
+      '<li>폰에도 컴퓨터와 똑같이 <b>그 폰 브라우저 안에만</b> 저장됩니다. 컴퓨터와 맞추려면 동기화 파일을 주고받으세요.</li>'+
+    '</ul>'+
+
+    '<h3>💾 저장은 어떻게 되나요? (중요)</h3>'+
+    '<p>서버가 없는 프로그램이라, 모든 저장은 <b>지금 이 컴퓨터·이 브라우저 안에만</b> 저장됩니다(브라우저 내부 저장소). 상단에 "● 이 컴퓨터에 자동 저장됨"이 보이면 정상입니다. 다른 컴퓨터와 같은 내용으로 맞추려면 위의 <b>동기화 파일</b>을 주고받으세요.</p>'+
+
+    '<h3>❓ 자주 묻는 질문</h3>'+
+    '<p><b>Q. 다른 컴퓨터에서 같은 HTML 파일을 열면 같은 데이터가 보이나요?</b><br>아니요 — 컴퓨터마다 따로 저장됩니다. 동기화 파일로 서로 합쳐 주세요.</p>'+
+    '<p><b>Q. 브라우저 기록·캐시를 지우면요?</b><br>저장 데이터도 지워질 수 있습니다. "사이트 데이터/쿠키 삭제" 옵션은 켜지 마시고, 중요한 때는 💾 백업에서 파일로 내려받아 두세요.</p>'+
+    '<p><b>Q. 실수로 삭제한 카드, 복구되나요?</b><br>네 — 삭제한 카드는 상단 <b>"🗑 휴지통"</b>에 보관되며 언제든 복구할 수 있습니다(영구 삭제를 누르기 전까지). 데이터 전체를 되돌리고 싶을 땐 <b>"💾 백업"</b>의 복원 기능을 쓰세요.</p>'
+};
+var helpModalWired = false;
+function openHelpModal(tab){
+  var overlay = document.getElementById("help-overlay");
+  if(!overlay) return;
+  overlay.hidden = false;
+  setHelpTab(tab||"usage");
+}
+function closeHelpModal(){
+  var overlay = document.getElementById("help-overlay");
+  if(overlay) overlay.hidden = true;
+}
+function setHelpTab(tab){
+  document.querySelectorAll(".help-tab").forEach(function(b){
+    b.classList.toggle("active", b.getAttribute("data-help-tab")===tab);
+  });
+  var body = document.getElementById("help-body");
+  if(body){ body.innerHTML = HELP_HTML[tab] || ""; body.scrollTop = 0; }
+}
+function wireHelpModalOnce(){
+  if(helpModalWired) return;
+  helpModalWired = true;
+  var overlay = document.getElementById("help-overlay");
+  var closeBtn = document.getElementById("help-close");
+  if(closeBtn) closeBtn.addEventListener("click", closeHelpModal);
+  if(overlay) overlay.addEventListener("click", function(e){ if(e.target===overlay) closeHelpModal(); });
+  document.querySelectorAll(".help-tab").forEach(function(b){
+    b.addEventListener("click", function(){ setHelpTab(b.getAttribute("data-help-tab")); });
+  });
+  window.addEventListener("keydown", function(e){
+    if(e.key==="Escape" && overlay && !overlay.hidden) closeHelpModal();
+  });
+}
+
+/* ---------- TOC view ---------- */
+var mobileFiltersOpen = false;
+function mobileFilterCount(){
+  return ["period","kpi","owner","dept","law"].filter(function(k){ return state[k] && state[k]!=="전체"; }).length;
+}
+function renderTOC(){
+  var app = document.getElementById("app");
+  var catChips = ["전체"].concat(VOCAB.categories).map(function(c){
+    return '<button class="chip'+(state.cat===c?" active":"")+'" data-cat="'+esc(c)+'">'+esc(c)+'</button>';
+  }).join("");
+  var periodOpts = '<option value="전체"'+(state.period==="전체"?" selected":"")+'>주기: 전체</option>'+
+    PERIODS.map(function(p){return '<option'+(state.period===p?" selected":"")+' value="'+esc(p)+'">'+esc(p)+'</option>';}).join("");
+  var kpiOpts = '<option value="전체"'+(state.kpi==="전체"?" selected":"")+'>성과지표: 전체</option>'+
+    KPIS.map(function(k){return '<option'+(state.kpi===k?" selected":"")+' value="'+esc(k)+'">'+esc(k)+'</option>';}).join("");
+  var ownerOpts = '<option value="전체"'+(state.owner==="전체"?" selected":"")+'>담당자: 전체</option>'+
+    VOCAB.owners.map(function(o){return '<option'+(state.owner===o?" selected":"")+' value="'+esc(o)+'">'+esc(o)+'</option>';}).join("");
+  var deptOpts = '<option value="전체"'+(state.dept==="전체"?" selected":"")+'>관련부서: 전체</option>'+
+    VOCAB.depts.map(function(d){return '<option'+(state.dept===d?" selected":"")+' value="'+esc(d)+'">'+esc(d)+'</option>';}).join("");
+
+  var lawOpts = '<option value="전체"'+(state.law==="전체"?" selected":"")+'>관련법령: 전체</option>'+
+    (VOCAB.laws||[]).filter(function(l){return l!=="해당없음";}).map(function(l){
+      return '<option'+(state.law===l?" selected":"")+' value="'+esc(l)+'">'+esc(l)+'</option>';
+    }).join("");
+
+  app.innerHTML =
+    '<div class="topbar gutter">'+
+      '<div class="brand"><h1>오봉관리역 서무 스마트잡(Smart Job)카드</h1><span class="sub">수도권서부본부 오봉관리역</span><span class="count tnum" id="toc-total"></span></div>'+
+      navBarHtml("toc")+
+      '<div class="search-row">'+
+        '<div class="search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>'+
+          '<input id="q" type="search" placeholder="업무명·담당자·키워드는 물론 처리방법·제출정보·법령·주의사항 등 본문까지 검색" value="'+esc(state.q)+'" autocomplete="off"></div>'+
+        '<button type="button" class="btn m-filter-btn m-only" id="m-filter-btn" aria-label="필터">⚙ 필터'+(mobileFilterCount()?'<span class="fdot"></span>':'')+'</button>'+
+      '</div>'+
+      '<div class="toolbar toc-filters">'+
+        '<select class="filter" id="f-period">'+periodOpts+'</select>'+
+        '<select class="filter" id="f-kpi">'+kpiOpts+'</select>'+
+        '<select class="filter" id="f-owner">'+ownerOpts+'</select>'+
+        '<select class="filter" id="f-dept">'+deptOpts+'</select>'+
+        '<select class="filter" id="f-law" title="이 법령·규정이 관련법령에 들어있는 업무카드만 보기">'+lawOpts+'</select>'+
+        '<button class="btn" id="btn-reset">첫화면</button>'+
+        '<button class="btn" id="btn-export" title="업무카드 상세 내용 전체를 포함한 엑셀 파일(.xlsx)로 내보냅니다. 자동 필터가 켜진 상태로 저장됩니다.">📊 엑셀로 내보내기(상세)</button>'+
+      '</div>'+
+      '<div class="chiprow">'+catChips+'</div>'+
+    '</div>'+
+    '<div class="gutter"><div id="toc-results"></div></div>'+
+    '<footer class="note gutter">인쇄하려면 브라우저 인쇄 기능(Ctrl/Cmd + P)을 사용하세요 · 표가 그대로 인쇄됩니다<br>오봉관리역 임승진, 이효나 제작</footer>';
+
+  function th(key,label){
+    var arrow = state.sortKey===key ? (state.sortDir===1?"▲":"▼") : "";
+    return '<th data-sort="'+key+'">'+label+' <span class="arrow">'+arrow+'</span></th>';
+  }
+  window.__th = th;
+
+  updateResults();
+  wireNavBar(app);
+
+  document.getElementById("q").addEventListener("input", function(e){ state.q=e.target.value; updateResults(); });
+  document.getElementById("f-period").addEventListener("change", function(e){ state.period=e.target.value; updateResults(); });
+  document.getElementById("f-kpi").addEventListener("change", function(e){ state.kpi=e.target.value; updateResults(); });
+  document.getElementById("f-owner").addEventListener("change", function(e){ state.owner=e.target.value; updateResults(); });
+  document.getElementById("f-dept").addEventListener("change", function(e){ state.dept=e.target.value; updateResults(); });
+  document.getElementById("f-law").addEventListener("change", function(e){ state.law=e.target.value; updateResults(); });
+  document.getElementById("btn-reset").addEventListener("click", function(){ state={q:"",cat:"전체",period:"전체",kpi:"전체",owner:"전체",dept:"전체",law:"전체",sortKey:"seq",sortDir:1}; renderTOC(); });
+  document.getElementById("btn-export").addEventListener("click", exportCSV);
+  var mfb = document.getElementById("m-filter-btn");
+  if(mfb) mfb.addEventListener("click", function(){ mobileFiltersOpen = !mobileFiltersOpen; app.querySelector(".topbar").classList.toggle("filters-open", mobileFiltersOpen); });
+  if(mobileFiltersOpen) app.querySelector(".topbar").classList.add("filters-open");
+  app.querySelectorAll(".chip").forEach(function(btn){
+    btn.addEventListener("click", function(){ state.cat=btn.getAttribute("data-cat"); renderTOC(); });
+  });
+}
+
+/* Only this is re-rendered while the user types in the search box, so the
+   input element itself is never replaced and keystrokes/IME composition
+   are never interrupted. */
+/* when the search term is found only in the body (not title/owner/keywords), show where */
+function snippetHtml(r){
+  var q = state.q.trim();
+  if(!q) return "";
+  var lq = q.toLowerCase();
+  if([r.title,r.owner,r.dept,r.keywords,r.no].join(" ").toLowerCase().indexOf(lq)!==-1) return "";
+  var m = matchSnippet(r, q);
+  if(!m) return "";
+  return '<div class="snip"><b>'+esc(m.label)+'</b> '+esc(m.pre)+'<mark>'+esc(m.hit)+'</mark>'+esc(m.post)+'</div>';
+}
+function updateResults(){
+  var rows = filteredRows();
+  var total = allRows().length;
+  var totalEl = document.getElementById("toc-total");
+  if(totalEl) totalEl.textContent = "전체 "+total+"건";
+
+  var th = window.__th;
+  var bodyRows = rows.map(function(r){
+    var pColor = PERIOD_COLORS[r.period]||"#ddd";
+    var kColor = KPI_COLORS[r.kpi]||"#ddd";
+    var stars = "★★★★★☆☆☆☆☆".slice(5-(r.importance||0),10-(r.importance||0));
+    return '<tr tabindex="0" data-id="'+esc(r.id)+'">'+
+      '<td class="cell-no tnum">'+esc(r.no)+'</td>'+
+      '<td>'+esc((r.category||"").replace(/^.*?\.\s*/,""))+'</td>'+
+      '<td class="cell-title">'+esc(r.title)+titleBadgeFor(r)+snippetHtml(r)+'</td>'+
+      '<td>'+esc(r.owner)+'</td>'+
+      '<td><span class="stars">'+stars+'</span></td>'+
+      '<td><span class="badge" style="background:'+pColor+'">'+esc(r.period)+'</span></td>'+
+      '<td><span class="badge" style="background:'+kColor+'">'+esc(r.kpi)+'</span></td>'+
+      '</tr>';
+  }).join("");
+
+  var html = '<div class="resultbar"><span class="tnum">'+rows.length+'개 표시 중 (전체 '+total+'건)</span></div>'+
+    (rows.length?
+      '<div class="table-wrap"><table class="toc"><thead><tr>'+
+        th("seq","No.")+th("category","분류")+th("title","업무명")+th("owner","담당자")+th("importance","중요도")+th("period","주기")+th("kpi","성과지표")+
+      '</tr></thead><tbody>'+bodyRows+'</tbody></table></div>'
+      : (total===0
+          ? '<div class="empty-state"><div class="big">업무카드가 아직 없습니다</div>오프라인 프로그램에서 만든 <b>동기화 파일</b>을 <b>더보기(또는 상단 💾 백업) → 동기화·백업 → 상대 파일 가져와 합치기</b>로 불러오면 모든 카드가 이 온라인 저장소에 올라갑니다.</div>'
+          : '<div class="empty-state"><div class="big">검색 결과가 없습니다</div>조건을 바꾸거나 첫화면으로 돌아가 보세요.</div>'));
+
+  var container = document.getElementById("toc-results");
+  container.innerHTML = html;
+  container.querySelectorAll("table.toc th[data-sort]").forEach(function(th2){
+    th2.addEventListener("click", function(){
+      var k = th2.getAttribute("data-sort");
+      if(state.sortKey===k) state.sortDir*=-1; else { state.sortKey=k; state.sortDir=1; }
+      updateResults();
+    });
+  });
+  container.querySelectorAll("table.toc tbody tr").forEach(function(tr){
+    function go(){ location.hash = "card/"+encodeURIComponent(tr.getAttribute("data-id")); }
+    tr.addEventListener("click", go);
+    tr.addEventListener("keydown", function(e){ if(e.key==="Enter") go(); });
+  });
+}
+
+/* ---------- minimal, dependency-free XLSX writer ----------
+   "CSV 내보내기" now produces a real .xlsx (not plain CSV), with every
+   업무카드 상세 항목as its own column and 자동 필터(autoFilter) already
+   turned on, by hand-assembling a ZIP/OOXML package — no external library,
+   fully offline. */
+var CRC_TABLE = (function(){
+  var t = new Uint32Array(256);
+  for(var n=0;n<256;n++){
+    var c = n;
+    for(var k=0;k<8;k++){ c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); }
+    t[n] = c>>>0;
+  }
+  return t;
+})();
+function crc32(bytes){
+  var c = 0xFFFFFFFF;
+  for(var i=0;i<bytes.length;i++){ c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); }
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zu16(n){ return [n&0xFF, (n>>>8)&0xFF]; }
+function zu32(n){ return [n&0xFF, (n>>>8)&0xFF, (n>>>16)&0xFF, (n>>>24)&0xFF]; }
+function buildZipBlob(files){
+  var enc = new TextEncoder();
+  var localParts = [], centralParts = [], offset = 0;
+  files.forEach(function(f){
+    var nameBytes = enc.encode(f.name);
+    var data = f.bytes;
+    var crc = crc32(data);
+    var header = [].concat(
+      zu32(0x04034b50), zu16(20), zu16(0), zu16(0), zu16(0), zu16(0x21),
+      zu32(crc), zu32(data.length), zu32(data.length),
+      zu16(nameBytes.length), zu16(0)
+    );
+    var local = new Uint8Array(header.length + nameBytes.length + data.length);
+    local.set(header, 0); local.set(nameBytes, header.length); local.set(data, header.length + nameBytes.length);
+    localParts.push(local);
+    var central = [].concat(
+      zu32(0x02014b50), zu16(20), zu16(20), zu16(0), zu16(0), zu16(0), zu16(0x21),
+      zu32(crc), zu32(data.length), zu32(data.length),
+      zu16(nameBytes.length), zu16(0), zu16(0), zu16(0), zu16(0), zu32(0), zu32(offset)
+    );
+    var centralBuf = new Uint8Array(central.length + nameBytes.length);
+    centralBuf.set(central, 0); centralBuf.set(nameBytes, central.length);
+    centralParts.push(centralBuf);
+    offset += local.length;
+  });
+  var centralStart = offset;
+  var centralSize = centralParts.reduce(function(s,p){return s+p.length;},0);
+  var eocd = new Uint8Array([].concat(
+    zu32(0x06054b50), zu16(0), zu16(0), zu16(files.length), zu16(files.length),
+    zu32(centralSize), zu32(centralStart), zu16(0)
+  ));
+  var total = localParts.reduce(function(s,p){return s+p.length;},0) + centralSize + eocd.length;
+  var out = new Uint8Array(total), pos = 0;
+  localParts.forEach(function(p){ out.set(p,pos); pos+=p.length; });
+  centralParts.forEach(function(p){ out.set(p,pos); pos+=p.length; });
+  out.set(eocd,pos);
+  return new Blob([out], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function xmlEsc(s){
+  return String(s==null?"":s).replace(/[&<>]/g, function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[m];}).replace(/\r?\n/g,"&#10;");
+}
+function colLetter(n){
+  var s = "";
+  while(n>0){ var m=(n-1)%26; s = String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); }
+  return s;
+}
+function buildXlsxBlob(headers, rows){
+  var enc = new TextEncoder();
+  var nCols = headers.length, nRows = rows.length;
+  var lastCol = colLetter(nCols);
+  function rowXml(cells, rIdx){
+    var tds = cells.map(function(v,i){
+      return '<c r="'+colLetter(i+1)+rIdx+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEsc(v)+'</t></is></c>';
+    }).join("");
+    return '<row r="'+rIdx+'">'+tds+'</row>';
+  }
+  var sheetRows = [rowXml(headers,1)];
+  rows.forEach(function(r,i){ sheetRows.push(rowXml(r, i+2)); });
+  var dim = "A1:"+lastCol+(nRows+1);
+  var sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<dimension ref="'+dim+'"/>'+
+    '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'+
+    '<cols><col min="1" max="'+nCols+'" width="20" customWidth="1"/></cols>'+
+    '<sheetData>'+sheetRows.join("")+'</sheetData>'+
+    '<autoFilter ref="'+dim+'"/>'+
+    '</worksheet>';
+  var workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+    '<sheets><sheet name="업무카드" sheetId="1" r:id="rId1"/></sheets></workbook>';
+  var contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+    '<Default Extension="xml" ContentType="application/xml"/>'+
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
+    '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'+
+    '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+
+    '</Types>';
+  var rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'+
+    '</Relationships>';
+  var wbRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'+
+    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'+
+    '</Relationships>';
+  var stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<fonts count="1"><font><sz val="10"/><name val="Malgun Gothic"/></font></fonts>'+
+    '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'+
+    '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'+
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+    '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'+
+    '</styleSheet>';
+  var files = [
+    {name:"[Content_Types].xml", bytes: enc.encode(contentTypes)},
+    {name:"_rels/.rels", bytes: enc.encode(rootRels)},
+    {name:"xl/workbook.xml", bytes: enc.encode(workbookXml)},
+    {name:"xl/_rels/workbook.xml.rels", bytes: enc.encode(wbRels)},
+    {name:"xl/styles.xml", bytes: enc.encode(stylesXml)},
+    {name:"xl/worksheets/sheet1.xml", bytes: enc.encode(sheetXml)}
+  ];
+  return buildZipBlob(files);
+}
+function exportCSV(){
+  var rows = filteredRows();
+  var headers = ["No.","분류","업무명","담당자","관련부서","중요도","소요시간","주기","성과지표",
+    "공문 키워드","업무 목적","업무 처리 절차(Flow)","상세 처리 방법","결과처리 방식(체크됨)","결과처리 기타",
+    "제출처","제출방법","제출기한","첨부서류","보관방법","관련 법령",
+    "업무 일정 기준(반복규칙 요약)","업무 일정 기준(자유기재)","주의사항","참고자료"];
+  var dataRows = rows.map(function(r){
+    var checks = r.result_checks||{};
+    var checkedLabels = CHECK_OPTIONS.filter(function(o){return checks[o.key];}).map(function(o){return o.key;}).join(", ");
+    var steps = (r.detail_steps||[]).filter(Boolean).join(" / ");
+    var ruleSummary = "";
+    try{ ruleSummary = ruleLabel(r.schedule_rule); }catch(e){}
+    return [
+      r.no, r.category, r.title, r.owner, r.dept, r.importance, r.duration, r.period, r.kpi,
+      r.keywords, r.purpose, r.flow, steps, checkedLabels, r.result_etc,
+      r.submit_dest, r.submit_way, r.submit_deadline, r.submit_attach, r.submit_storage, r.submit_law,
+      ruleSummary, r.schedule, r.caution, r.reference
+    ].map(function(v){ return v==null ? "" : String(v); });
+  });
+  try{
+    var blob = buildXlsxBlob(headers, dataRows);
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "서무업무카드_전체내용.xlsx";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }catch(e){ showToast("다운로드를 사용할 수 없습니다: "+(e&&e.message||e)); }
+}
+
+/* ---------- structured schedule rule (drives the annual plan) ---------- */
+var FREQ_OPTIONS = ["매월","분기","반기","연간","수시"];
+var DAY_TYPE_OPTIONS = [
+  {key:"", label:"(일자 미지정)"},
+  {key:"day", label:"특정일"},
+  {key:"말일", label:"말일"},
+  {key:"초", label:"초(1~5일경)"},
+  {key:"말달", label:"말달(주기의 마지막 달)"}
+];
+function blankRule(){
+  return {mode:"freq", freq:"수시", offset:"당월", day_type:"", day_value:null, until:false, months:[]};
+}
+function normalizeRule(r){
+  return Object.assign(blankRule(), r||{});
+}
+/* which calendar months this rule applies to, honoring 당월/익월 offset */
+function monthsFromRule(rule){
+  rule = normalizeRule(rule);
+  var base;
+  if(rule.mode==="months"){
+    base = (rule.months||[]).slice();
+  } else {
+    switch(rule.freq){
+      case "매월": base = [1,2,3,4,5,6,7,8,9,10,11,12]; break;
+      case "분기": base = [3,6,9,12]; break;
+      case "반기": base = [6,12]; break;
+      case "연간": base = [3]; break;
+      default: base = []; break;
+    }
+    if(rule.offset==="익월"){ base = base.map(function(m){ return m===12?1:m+1; }); }
+  }
+  return base.slice().sort(function(a,b){return a-b;});
+}
+/* human-readable label, e.g. "(매분기익월) [5일] (까지)" */
+function ruleLabel(rule){
+  rule = normalizeRule(rule);
+  if(rule.mode==="months"){
+    var ms = (rule.months||[]).slice().sort(function(a,b){return a-b;});
+    return ms.length ? ms.map(function(m){return "("+m+"월)";}).join(" ") : "";
+  }
+  if(rule.freq==="수시") return "(수시)";
+  var freqLabel = "("+rule.freq+(rule.offset==="익월"?"익월":"")+")";
+  var dayLabel = "";
+  if(rule.day_type==="day" && rule.day_value) dayLabel = "["+rule.day_value+"일]";
+  else if(rule.day_type==="말일") dayLabel = "[말일]";
+  else if(rule.day_type==="초") dayLabel = "[초]";
+  else if(rule.day_type==="말달") dayLabel = "[말달]";
+  var untilLabel = rule.until ? "(까지)" : "";
+  return [freqLabel, dayLabel, untilLabel].filter(Boolean).join(" ");
+}
+
+/* ---------- Annual plan view ---------- */
+function monthsForCard(card){
+  if(card.schedule_rule) return monthsFromRule(card.schedule_rule);
+  // legacy fallback for any card that predates the structured rule
+  var months = {};
+  var text = (card.schedule||"")+" "+(card.caution||"");
+  var re = /(\d{1,2})\s*월/g, m;
+  while((m=re.exec(text))){
+    var mo = parseInt(m[1],10);
+    if(mo>=1 && mo<=12) months[mo]=true;
+  }
+  var found = Object.keys(months).map(Number);
+  if(found.length) return found.sort(function(a,b){return a-b;});
+  switch(card.period){
+    case "매월": return [1,2,3,4,5,6,7,8,9,10,11,12];
+    case "분기": return [3,6,9,12];
+    case "반기": return [6,12];
+    case "연간": return [3];
+    default: return [];
+  }
+}
+
+var planShowAll = false; // default: only important (★4+) tasks shown per cell, to stay scannable
+
+var planMobMonth = new Date().getMonth()+1;
+function renderPlan(){
+  var app = document.getElementById("app");
+  var cats = VOCAB.categories.slice();
+  var grid = {}; cats.forEach(function(c){ grid[c]={}; for(var m=1;m<=12;m++) grid[c][m]=[]; });
+  var unscheduled = [];
+  CARDS.filter(function(c){return !c.deleted;}).forEach(function(c){
+    var months = monthsForCard(c);
+    if(!months.length){ unscheduled.push(c); return; }
+    if(!grid[c.category]){ grid[c.category]={}; for(var m2=1;m2<=12;m2++) grid[c.category][m2]=[]; }
+    months.forEach(function(mo){ grid[c.category][mo].push(c); });
+  });
+  Object.keys(grid).forEach(function(cat){
+    for(var mo=1; mo<=12; mo++){ grid[cat][mo].sort(function(a,b){ return (b.importance||0)-(a.importance||0) || (a.seq||0)-(b.seq||0); }); }
+  });
+
+  var planYear = new Date().getFullYear();
+  function chip(c, mo){
+    var color = PERIOD_COLORS[c.period]||"#8FE3DC";
+    var rl = ruleLabel(c.schedule_rule);
+    var isDone = isDoneKey(c, periodKey(planYear, mo));
+    return '<div class="plan-chip'+(isDone?' plan-chip-done':'')+'" style="border-left-color:'+color+'" data-goto-card="'+esc(c.id)+'" title="'+esc(c.title+(rl?" · "+rl:"")+(isDone?" · "+mo+"월 처리 완료":""))+'">'+
+      '<span class="plan-chip-no">'+esc(c.no)+'</span> '+(isDone?'✓ ':'')+esc(c.title)+
+      (rl?'<span class="plan-chip-rule">'+esc(rl)+'</span>':'')+
+    '</div>';
+  }
+
+  var rowsHtml = Object.keys(grid).map(function(cat){
+    var cells = "";
+    for(var mo=1; mo<=12; mo++){
+      var items = grid[cat][mo]||[];
+      var shown = planShowAll ? items : items.filter(function(c){ return (c.importance||0)>=4; });
+      var hiddenCount = items.length - shown.length;
+      var evs = (EVENTS||[]).filter(function(ev){ return ev.month===mo; });
+      var evHtml = evs.map(function(ev){ return '<div class="plan-chip plan-chip-event" title="'+esc(ev.title)+(ev.note?" · "+esc(ev.note):"")+'">📌 '+esc(ev.title||"(제목 없음)")+'</div>'; }).join("");
+      var more = hiddenCount>0 ? '<div class="plan-chip plan-chip-more" data-more-cat="'+esc(cat)+'" data-more-mo="'+mo+'">+'+hiddenCount+'건</div>' : "";
+      cells += '<div class="plan-cell'+(mo===planMobMonth?' sel':'')+'" data-m="'+mo+'">'+evHtml+shown.map(function(c){ return chip(c, mo); }).join("")+more+'</div>';
+    }
+    return '<div class="rowlabel">'+esc(cat.replace(/^.*?\.\s*/,""))+'</div>'+cells;
+  }).join("");
+
+  var header = '<div class="ph">분류 \\ 월</div>'+MONTH_NAMES.map(function(mn){return '<div class="ph">'+mn+'</div>';}).join("");
+  var mchips = '<div class="plan-mchips m-only">'+MONTH_NAMES.map(function(mn,i){
+    return '<button type="button" data-mm="'+(i+1)+'" class="'+((i+1)===planMobMonth?'sel':'')+((i+1)===(new Date().getMonth()+1)?' cur':'')+'">'+mn+'</button>';
+  }).join("")+'</div>';
+
+  var evRows = (EVENTS||[]).slice().sort(function(a,b){return (a.month||0)-(b.month||0);}).map(function(ev){
+    return '<div class="ev-row" data-ev-id="'+esc(ev.id)+'">'+
+      '<select data-ev-month>'+MONTH_NAMES.map(function(mn,i){return '<option value="'+(i+1)+'"'+(ev.month===(i+1)?" selected":"")+'>'+mn+'</option>';}).join("")+'</select>'+
+      '<input type="text" data-ev-title value="'+esc(ev.title||"")+'" placeholder="일정명 (예: 체육대회, 명절 봉사활동)">'+
+      '<input type="text" data-ev-note value="'+esc(ev.note||"")+'" placeholder="메모 (장소, 담당, 대상 등)">'+
+      '<button type="button" class="btn icon-btn btn-danger" data-ev-remove>삭제</button>'+
+    '</div>';
+  }).join("");
+
+  var unschedHtml = unscheduled.length ? ('<div class="hint" style="margin-top:14px">⏱ 월 정보가 없는 수시 업무 ('+unscheduled.length+'건) — 카드의 "업무 일정 기준"에서 주기/일자를 설정하면 자동으로 표에 반영됩니다.</div>') : "";
+
+  app.innerHTML =
+    '<div class="topbar gutter">'+
+      '<div class="brand"><h1>오봉관리역 서무 스마트잡(Smart Job)카드</h1><span class="sub">연간업무계획</span></div>'+
+      navBarHtml("plan")+mchips+
+      '<div class="toolbar" style="padding-top:0">'+
+        '<div class="chiprow" style="margin:0"><button type="button" class="chip'+(!planShowAll?" active":"")+'" data-show="important">★4 이상 주요 업무만</button><button type="button" class="chip'+(planShowAll?" active":"")+'" data-show="all">전체 업무 보기</button></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="gutter">'+
+      '<div class="table-wrap plan-wrap"><div class="plan-grid">'+header+rowsHtml+'</div></div>'+
+      unschedHtml+
+      '<div style="margin-top:22px">'+
+        '<h3 style="font-size:13px;margin-bottom:10px">주요 연간 일정 (직접 관리)</h3>'+
+        '<div id="ev-list">'+evRows+'</div>'+
+        '<button class="btn btn-sm" id="btn-add-event">+ 일정 추가</button>'+
+      '</div>'+
+      '<footer class="note">업무카드의 "업무 일정 기준"(주기/일자 설정)이 그대로 연동되어 표시됩니다 · 카드를 수정하면 이 표에도 바로 반영됩니다<br>오봉관리역 임승진, 이효나 제작</footer>'+
+    '</div>';
+
+  wireNavBar(app);
+  var selChip = app.querySelector("[data-mm].sel");
+  if(selChip && selChip.scrollIntoView){ try{ var strip = selChip.parentNode; strip.scrollLeft = Math.max(0, selChip.offsetLeft - 60); }catch(e){} }
+  app.querySelectorAll("[data-mm]").forEach(function(b){
+    b.addEventListener("click", function(){
+      planMobMonth = parseInt(b.getAttribute("data-mm"),10);
+      app.querySelectorAll("[data-mm]").forEach(function(x){ x.classList.toggle("sel", x===b); });
+      app.querySelectorAll(".plan-cell").forEach(function(c){ c.classList.toggle("sel", parseInt(c.getAttribute("data-m"),10)===planMobMonth); });
+    });
+  });
+  app.querySelectorAll("[data-show]").forEach(function(b){
+    b.addEventListener("click", function(){ planShowAll = (b.getAttribute("data-show")==="all"); renderPlan(); });
+  });
+  app.querySelectorAll("[data-goto-card]").forEach(function(el){
+    el.addEventListener("click", function(){ location.hash = "card/"+encodeURIComponent(el.getAttribute("data-goto-card")); });
+  });
+  app.querySelectorAll("[data-more-cat]").forEach(function(el){
+    el.addEventListener("click", function(){ planShowAll = true; renderPlan(); });
+  });
+
+  function wireEventRow(row){
+    var id = row.getAttribute("data-ev-id");
+    function get(){ return (EVENTS||[]).find(function(e){return e.id===id;}); }
+    row.querySelector("[data-ev-month]").addEventListener("change", function(e){ var ev=get(); if(ev){ ev.month=parseInt(e.target.value,10); persistEvent(ev); } });
+    row.querySelector("[data-ev-title]").addEventListener("input", function(e){ var ev=get(); if(ev){ ev.title=e.target.value; persistEvent(ev); } });
+    row.querySelector("[data-ev-note]").addEventListener("input", function(e){ var ev=get(); if(ev){ ev.note=e.target.value; persistEvent(ev); } });
+    row.querySelector("[data-ev-remove]").addEventListener("click", function(){
+      EVENTS = (EVENTS||[]).filter(function(e){return e.id!==id;});
+      deleteEventRemote(id);
+      renderPlan();
+    });
+  }
+  app.querySelectorAll(".ev-row").forEach(wireEventRow);
+  document.getElementById("btn-add-event").addEventListener("click", function(){
+    var ev = {id:uid(), month:1, title:"", note:""};
+    EVENTS = (EVENTS||[]).concat([ev]);
+    persistEvent(ev);
+    renderPlan();
+  });
+}
+
+/* ---------- 오늘/이번 주 할 일 + 월별 완료 체크 ----------
+   card.done = { "2026-10": {ts, memo} } — 해당 월의 업무를 처리 완료했다는 기록.
+   변경로그(card.logs)에는 남기지 않아서 편집 이력이 밀려나지 않습니다. */
+function pad2(n){ return (n<10?"0":"")+n; }
+function periodKey(y,m){ return y+"-"+pad2(m); }
+function lastDayOf(y,m){ return new Date(y,m,0).getDate(); }
+function startOfDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function daysBetween(a,b){ return Math.round((startOfDay(b)-startOfDay(a))/86400000); }
+function localDateStr(d){ d=d||new Date(); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+var WEEKDAYS = ["일","월","화","수","목","금","토"];
+
+/* due day inside a given month for a rule; exact=false means "일자 미지정" (treated as month end) */
+function dueInfo(rule, y, m){
+  rule = normalizeRule(rule);
+  var last = lastDayOf(y,m);
+  if(rule.day_type==="day" && rule.day_value) return {day:Math.min(rule.day_value,last), exact:true};
+  if(rule.day_type==="말일") return {day:last, exact:true};
+  if(rule.day_type==="초") return {day:Math.min(5,last), exact:true};
+  return {day:last, exact:false};
+}
+/* Overdue tracking starts from the 1st of the month in which this feature is first used,
+   so the whole past year does not suddenly show up as "지연". */
+function getTrackStart(){
+  if(!VOCAB) return null;
+  if(!VOCAB._trackStart){
+    var n = new Date();
+    VOCAB._trackStart = n.getFullYear()+"-"+pad2(n.getMonth()+1)+"-01";
+    persistVocab();
+  }
+  return VOCAB._trackStart;
+}
+function isDoneKey(card, key){ var e = card.done && card.done[key]; return !!(e && !e.off); }
+function cardOccurrences(card, today){
+  var out = [];
+  var months = monthsForCard(card);
+  if(!months.length) return out;
+  var y = today.getFullYear(), m = today.getMonth()+1;
+  var py = (m===1)?y-1:y, pm = (m===1)?12:m-1;
+  [[py,pm],[y,m]].forEach(function(ym){
+    if(months.indexOf(ym[1])===-1) return;
+    var di = dueInfo(card.schedule_rule, ym[0], ym[1]);
+    var due = new Date(ym[0], ym[1]-1, di.day);
+    var key = periodKey(ym[0], ym[1]);
+    out.push({card:card, key:key, y:ym[0], m:ym[1], due:due, exact:di.exact,
+      done:isDoneKey(card, key), diff:daysBetween(today, due)});
+  });
+  return out;
+}
+function classifyOcc(o, today, weekEnd, trackStart){
+  if(o.done) return "done";
+  var curM = today.getMonth()+1;
+  var ts = trackStart ? new Date(trackStart+"T00:00:00") : null;
+  if(o.diff<0){
+    if(ts && o.due<ts && o.m!==curM) return "ignore";
+    return "overdue";
+  }
+  if(o.diff===0) return "today";
+  if(o.exact && o.due<=weekEnd) return "week";
+  return o.exact ? "later" : "nodate";
+}
+function weekEndOf(today){
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate() + (6-((today.getDay()+6)%7)));
+}
+function dBadgeHtml(o, kind){
+  if(kind==="overdue"){
+    return o.m!==(new Date().getMonth()+1) && !o.exact
+      ? '<span class="dbadge red">전월 미처리</span>'
+      : '<span class="dbadge red">지연 '+(-o.diff)+'일</span>';
+  }
+  if(kind==="today") return '<span class="dbadge red">오늘</span>';
+  if(kind==="week") return '<span class="dbadge amber">D-'+o.diff+'</span>';
+  if(kind==="later") return '<span class="dbadge">D-'+o.diff+'</span>';
+  if(kind==="nodate") return '<span class="dbadge">'+o.m+'월 중</span>';
+  if(kind==="done") return '<span class="dbadge green">완료</span>';
+  return "";
+}
+/* badge for the TOC list: only overdue / today / within 3 days */
+function titleBadgeFor(card){
+  var today = new Date(), ts = getTrackStart(), we = weekEndOf(today);
+  var worst = null;
+  cardOccurrences(card, today).forEach(function(o){
+    var k = classifyOcc(o, today, we, ts);
+    if(k==="overdue"){ if(!worst || worst.k!=="overdue" || o.diff<worst.o.diff) worst = {k:k,o:o}; }
+    else if(k==="today"){ if(!worst || worst.k==="week") worst = {k:k,o:o}; }
+    else if(k==="week" && o.diff<=3 && !worst){ worst = {k:k,o:o}; }
+  });
+  return worst ? '<span class="title-badge">'+dBadgeHtml(worst.o, worst.k)+'</span>' : "";
+}
+function todayAlertCount(){
+  if(!CARDS) return 0;
+  var today = new Date(), ts = getTrackStart(), we = weekEndOf(today), n = 0;
+  allRows().forEach(function(c){
+    cardOccurrences(c, today).forEach(function(o){
+      var k = classifyOcc(o, today, we, ts);
+      if(k==="overdue" || k==="today") n++;
+    });
+  });
+  return n;
+}
+function setOccDone(card, key, on, memo){
+  card.done = card.done || {};
+  if(on){
+    var prev = card.done[key];
+    var keepTs = (prev && !prev.off && prev.ts) ? prev.ts : new Date().toISOString();
+    card.done[key] = {ts:keepTs, memo:(memo!=null?memo:(prev&&!prev.off&&prev.memo)||"")};
+  } else {
+    // "취소"도 기록으로 남겨야 동기화할 때 상대 컴퓨터에서도 취소됩니다
+    card.done[key] = {ts:new Date().toISOString(), off:true, memo:""};
+  }
+  card.updatedAt = new Date().toISOString();
+  if(idb && canWrite){ idbPut("cards", card).catch(function(){ showToast("저장 실패 — 브라우저 저장소를 확인해 주세요"); }); }
+}
+
+var todayOwner = "전체", todayShowDone = false;
+function renderToday(){
+  var app = document.getElementById("app");
+  var today = new Date(), ts = getTrackStart(), we = weekEndOf(today), curM = today.getMonth()+1;
+  var groups = {overdue:[], today:[], week:[], later:[], nodate:[], done:[]};
+  allRows().forEach(function(c){
+    if(todayOwner!=="전체" && tokenize(c.owner).indexOf(todayOwner)===-1) return;
+    cardOccurrences(c, today).forEach(function(o){
+      var k = classifyOcc(o, today, we, ts);
+      if(k==="ignore") return;
+      if(k==="done"){ if(o.m===curM) groups.done.push(o); return; }
+      groups[k].push(o);
+    });
+  });
+  Object.keys(groups).forEach(function(k){
+    groups[k].sort(function(a,b){ return (a.due-b.due) || ((b.card.importance||0)-(a.card.importance||0)) || ((a.card.seq||0)-(b.card.seq||0)); });
+  });
+
+  function rowHtml(o, k){
+    var c = o.card;
+    var when = o.exact ? (o.m+"/"+o.due.getDate()+"("+WEEKDAYS[o.due.getDay()]+")") : (o.m+"월 중");
+    return '<div class="today-row'+(o.done?' is-done':'')+'">'+
+      '<label class="today-check" title="처리 완료 체크"><input type="checkbox" data-occ-card="'+esc(c.id)+'" data-occ-key="'+esc(o.key)+'"'+(o.done?' checked':'')+(canWrite?'':' disabled')+'></label>'+
+      '<span class="cell-no tnum">'+esc(c.no)+'</span>'+
+      '<a class="today-title" href="#card/'+encodeURIComponent(c.id)+'">'+esc(c.title)+'</a>'+
+      '<span class="today-meta">'+esc(c.owner||"")+'</span>'+
+      '<span class="today-rule">'+esc(when)+' · '+esc(ruleLabel(c.schedule_rule))+'</span>'+
+      dBadgeHtml(o, k)+
+    '</div>';
+  }
+  var DEFS = [
+    ["overdue","⏰ 지연 (기한이 지났는데 아직 처리 체크가 없는 업무)"],
+    ["today","📌 오늘 마감"],
+    ["week","📅 이번 주 (일요일까지)"],
+    ["later","🗓 이번 달 남은 일정"],
+    ["nodate","📋 이번 달 업무 (일자 미지정)"]
+  ];
+  if(todayShowDone) DEFS.push(["done","✅ 이번 달 처리 완료"]);
+  var body = DEFS.map(function(d){
+    var list = groups[d[0]];
+    if(!list.length) return "";
+    return '<div class="today-group"><h3>'+d[1]+' <span class="cnt">'+list.length+'건</span></h3><div class="today-list">'+
+      list.map(function(o){ return rowHtml(o, d[0]); }).join("")+'</div></div>';
+  }).join("");
+  if(!body) body = '<div class="empty-state"><div class="big">남은 업무가 없습니다 🎉</div>이번 달 예정된 업무가 모두 처리되었거나, 일정이 설정된 업무가 없습니다.</div>';
+
+  var ownerOpts = '<option value="전체">담당자: 전체</option>'+VOCAB.owners.map(function(o){
+    return '<option value="'+esc(o)+'"'+(todayOwner===o?" selected":"")+'>'+esc(o)+'</option>';
+  }).join("");
+  var dateLabel = today.getFullYear()+"."+pad2(curM)+"."+pad2(today.getDate())+" ("+WEEKDAYS[today.getDay()]+")";
+
+  app.innerHTML =
+    '<div class="topbar gutter">'+
+      '<div class="brand"><h1>📅 오늘 할 일</h1><span class="sub">'+dateLabel+'</span></div>'+
+      navBarHtml("today")+
+      '<div class="toolbar" style="padding-top:0">'+
+        '<select class="filter" id="today-owner">'+ownerOpts+'</select>'+
+        '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" id="today-showdone"'+(todayShowDone?" checked":"")+'> 이번 달 완료 항목도 보기</label>'+
+      '</div>'+
+    '</div>'+
+    '<div class="gutter">'+
+      '<div class="today-sum">'+
+        '<span class="pill-n'+(groups.overdue.length?' red':'')+'">지연 <b>'+groups.overdue.length+'</b></span>'+
+        '<span class="pill-n">오늘 <b>'+groups.today.length+'</b></span>'+
+        '<span class="pill-n">이번 주 <b>'+groups.week.length+'</b></span>'+
+        '<span class="pill-n">이번 달 전체 남음 <b>'+(groups.week.length+groups.today.length+groups.later.length+groups.nodate.length+groups.overdue.filter(function(o){return o.m===curM;}).length)+'</b></span>'+
+      '</div>'+
+      body+
+      '<footer class="note">각 카드의 "업무 일정 기준"(주기·일자)으로 자동 계산됩니다 · 체크박스를 누르면 해당 월 처리 완료로 기록되고, 카드 화면의 "처리 이력"에서 확인·메모할 수 있습니다 · 지연 판정은 이 기능을 처음 연 달의 1일부터 시작합니다 · 수시 업무는 표시되지 않습니다</footer>'+
+    '</div>';
+
+  wireNavBar(app);
+  document.getElementById("today-owner").addEventListener("change", function(e){ todayOwner = e.target.value; renderToday(); });
+  document.getElementById("today-showdone").addEventListener("change", function(e){ todayShowDone = e.target.checked; renderToday(); });
+  app.querySelectorAll("[data-occ-card]").forEach(function(cb){
+    cb.addEventListener("change", function(){
+      var c = byId(cb.getAttribute("data-occ-card"));
+      if(!c) return;
+      setOccDone(c, cb.getAttribute("data-occ-key"), cb.checked);
+      renderToday();
+    });
+  });
+}
+
+/* history block shown at the bottom of a card (view mode only) */
+function doneBlockHtml(card){
+  if(editMode) return "";
+  var now = new Date(), y = now.getFullYear(), m = now.getMonth()+1;
+  var months = monthsForCard(card);
+  var done = card.done || {};
+  var chips = "";
+  for(var mo=1; mo<=12; mo++){
+    var key = periodKey(y,mo), isDone = isDoneKey(card, key), sched = months.indexOf(mo)!==-1;
+    chips += '<button type="button" class="mchip'+(isDone?' on':'')+(sched?' sched':'')+(mo===m?' cur':'')+'" data-done-toggle="'+key+'"'+(canWrite?'':' disabled')+
+      ' title="'+(sched?'예정된 달':'예정 없는 달')+' — 클릭하면 처리 완료를 '+(isDone?'취소':'체크')+'합니다">'+mo+'월'+(isDone?' ✓':'')+'</button>';
+  }
+  var keys = Object.keys(done).filter(function(k){ return !(done[k] && done[k].off); }).sort().reverse();
+  var rows = keys.map(function(k){
+    var e = done[k] || {};
+    return '<div class="done-row"><span class="tnum"><b>'+esc(k)+'</b></span><span class="done-ts">'+esc(fmtTs(e.ts))+' 처리</span>'+
+      '<input class="field done-memo" data-done-memo="'+esc(k)+'" value="'+esc(e.memo||"")+'" placeholder="메모 (예: 공문번호, 특이사항)"'+(canWrite?'':' disabled')+'>'+
+      (canWrite?'<button type="button" class="btn icon-btn btn-danger" data-done-toggle="'+esc(k)+'">취소</button>':'')+'</div>';
+  }).join("");
+  return '<div class="sec done-block"><h3><span class="label">✅ 처리 이력 ('+y+'년)</span></h3>'+
+    '<div class="hint">월을 눌러 "처리 완료"를 체크하세요. 테두리가 진한 달은 이 업무의 예정 월입니다.</div>'+
+    '<div class="mchips">'+chips+'</div>'+
+    (rows || '<div class="body" style="color:var(--fg-faint)">아직 처리 기록이 없습니다</div>')+
+  '</div>';
+}
+
+/* ---------- Trash (soft-deleted cards) ---------- */
+function renderTrash(){
+  var app = document.getElementById("app");
+  var trashed = CARDS.filter(function(c){return c.deleted;}).sort(function(a,b){
+    return new Date(b.deletedAt||0) - new Date(a.deletedAt||0);
+  });
+  var rows = trashed.map(function(c){
+    return '<div class="trash-row">'+
+      '<div class="trash-info">'+
+        '<span class="cell-no tnum">'+esc(c.no)+'</span>'+
+        '<span class="cell-title">'+esc(c.title)+'</span>'+
+        '<span class="trash-date">삭제됨: '+fmtTs(c.deletedAt)+'</span>'+
+      '</div>'+
+      '<div class="trash-actions">'+
+        '<button type="button" class="btn btn-sm btn-primary" data-restore="'+esc(c.id)+'">↺ 복구</button>'+
+        '<button type="button" class="btn btn-sm btn-danger" data-purge="'+esc(c.id)+'">영구 삭제</button>'+
+      '</div>'+
+    '</div>';
+  }).join("");
+  app.innerHTML =
+    '<div class="topbar gutter">'+
+      '<div class="brand"><h1>🗑 휴지통</h1><span class="sub">삭제된 업무카드 — 복구하거나 영구 삭제할 수 있습니다</span><span class="count tnum">'+trashed.length+'건</span></div>'+
+      navBarHtml("")+
+    '</div>'+
+    '<div class="gutter">'+
+    '<div class="card-nav"><a class="btn" href="#toc">← 목차로</a></div>'+
+    (trashed.length
+      ? '<div class="trash-list">'+rows+'</div>'
+      : '<div class="empty-state"><div class="big">휴지통이 비어 있습니다</div>삭제한 업무카드가 여기에 보관되며, 언제든 복구할 수 있습니다.</div>')+
+    '</div>';
+  wireNavBar(app);
+  app.querySelectorAll("[data-restore]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var c = byId(b.getAttribute("data-restore"));
+      if(c){
+        delete c.deleted; delete c.deletedAt;
+        persistCard(c, "휴지통에서 복구");
+        showToast("카드를 복구했습니다");
+        renderTrash();
+      }
+    });
+  });
+  app.querySelectorAll("[data-purge]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var cid = b.getAttribute("data-purge");
+      if(window.confirm("정말 영구적으로 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")){
+        CARDS = CARDS.filter(function(c){return c.id!==cid;});
+        deleteCardRemote(cid);
+        showToast("영구 삭제했습니다");
+        renderTrash();
+      }
+    });
+  });
+}
+
+/* ---------- Card view ---------- */
+var editMode = false;
+var draft = null;
+var logPanelOpen = false;
+var deleteArmed = false;
+
+function renderCard(id){
+  var card = byId(id);
+  if(!card){
+    document.getElementById("app").innerHTML = '<div class="gutter"><div class="empty-state"><div class="big">카드를 찾을 수 없습니다</div><a href="#toc">목차로 돌아가기</a></div></div>';
+    return;
+  }
+  if(card.deleted){
+    document.getElementById("app").innerHTML =
+      '<div class="gutter"><div class="card-nav"><a class="btn" href="#toc">← 목차</a></div>'+
+      '<div class="card-sheet"><div class="card-head">'+
+        '<div style="font-size:12px;color:var(--fg-muted);margin-bottom:4px">'+esc(card.no)+'</div>'+
+        '<h2>'+esc(card.title)+'</h2>'+
+        '<div class="note" style="margin-top:10px">🗑 이 카드는 휴지통에 있습니다 (삭제됨: '+fmtTs(card.deletedAt)+')</div>'+
+      '</div>'+
+      '<div style="padding:14px 20px 20px;display:flex;gap:8px">'+
+        '<button type="button" class="btn btn-primary" id="btn-restore-inline">↺ 복구</button>'+
+        '<a class="btn" href="#trash">휴지통으로</a>'+
+      '</div></div></div>';
+    document.getElementById("btn-restore-inline").addEventListener("click", function(){
+      delete card.deleted; delete card.deletedAt;
+      persistCard(card, "휴지통에서 복구");
+      showToast("카드를 복구했습니다");
+      location.hash = "card/"+encodeURIComponent(card.id);
+    });
+    return;
+  }
+  editMode = false; draft = null; deleteArmed = false;
+  renderCardShell(id, false);
+}
+
+function renderCardShell(id, isNew){
+  var app = document.getElementById("app");
+  var idxSorted = CARDS.slice().sort(function(a,b){return (a.seq||0)-(b.seq||0);});
+  var idx = idxSorted.findIndex(function(c){return c.id===id;});
+  var card = editMode && draft ? draft : byId(id);
+  if(!card){ document.getElementById("app").innerHTML = '<div class="gutter"><div class="empty-state"><div class="big">카드를 찾을 수 없습니다</div><a href="#toc">목차로 돌아가기</a></div></div>'; return; }
+  var prevId = (!isNew && idx>0) ? idxSorted[idx-1].id : null;
+  var nextId = (!isNew && idx>=0 && idx<idxSorted.length-1) ? idxSorted[idx+1].id : null;
+  var pColor = PERIOD_COLORS[card.period]||"#ddd";
+  var kColor = KPI_COLORS[card.kpi]||"#ddd";
+  var stars = card.importance||0;
+
+  function navBtn(targetId,label){
+    if(!targetId) return '<button class="btn" disabled>'+label+'</button>';
+    return '<button class="btn" data-nav="'+esc(targetId)+'">'+label+'</button>';
+  }
+
+  var periodOpts = PERIODS.map(function(p){return '<option'+(card.period===p?" selected":"")+'>'+esc(p)+'</option>';}).join("");
+  var kpiOpts = KPIS.map(function(k){return '<option'+(card.kpi===k?" selected":"")+'>'+esc(k)+'</option>';}).join("");
+  var catOpts = VOCAB.categories.map(function(c){return '<option'+(card.category===c?" selected":"")+'>'+esc(c)+'</option>';}).join("");
+
+  function moveBtns(key){
+    if(!editMode) return "";
+    var order = draft.sectionOrder;
+    var i = order.indexOf(key);
+    return '<span class="move-btns">'+
+      '<button type="button" class="btn icon-btn" data-move-up="'+key+'" '+(i<=0?"disabled":"")+'>▲</button>'+
+      '<button type="button" class="btn icon-btn" data-move-down="'+key+'" '+(i>=order.length-1?"disabled":"")+'>▼</button>'+
+      '</span>';
+  }
+
+  function secWrap(key, innerHtml){
+    var skip = (key==="images" && !(card.images||[]).length) ? " print-skip" : "";
+    return '<div class="sec'+skip+'" data-sec="'+key+'"><h3><span class="label">'+esc(SECTION_LABELS[key])+'</span>'+moveBtns(key)+'</h3>'+innerHtml+'</div>';
+  }
+
+  function textField(field, multiline, placeholder){
+    var val = card[field]||"";
+    if(!editMode) return '<div class="body">'+(val?nl2br(val):'<span style="color:var(--fg-faint)">-</span>')+'</div>';
+    return multiline
+      ? '<textarea class="field" data-field="'+field+'" rows="3" placeholder="'+esc(placeholder||"")+'">'+esc(val)+'</textarea><div class="hint">이미지를 복사해 Ctrl/Cmd+V로 붙여넣을 수 있습니다</div>'
+      : '<input class="field" type="text" data-field="'+field+'" value="'+esc(val)+'" placeholder="'+esc(placeholder||"")+'">';
+  }
+
+  function resultSection(){
+    if(!editMode){
+      var pills = CHECK_OPTIONS.map(function(o){
+        var on = !!(card.result_checks && card.result_checks[o.key]);
+        return '<span class="pill'+(on?" on":"")+'">'+o.emoji+' '+esc(o.key)+(on?' ✓':'')+'</span>';
+      }).join("");
+      if(card.result_etc) pills += '<span class="pill on">✏️ 기타: '+esc(card.result_etc)+' ✓</span>';
+      return '<div class="check-pills">'+pills+'</div>';
+    }
+    var boxes = CHECK_OPTIONS.map(function(o){
+      var on = !!(card.result_checks && card.result_checks[o.key]);
+      return '<label><input type="checkbox" data-check="'+esc(o.key)+'" '+(on?"checked":"")+'>'+o.emoji+' '+esc(o.key)+'</label>';
+    }).join("");
+    return '<div class="check-edit">'+boxes+'</div>'+
+      '<div class="etc-row">✏️ 기타: <input class="field" type="text" id="result-etc" value="'+esc(card.result_etc||"")+'" placeholder="직접 입력"></div>';
+  }
+
+  function detailSection(){
+    var steps = card.detail_steps||[];
+    if(!editMode){
+      if(!steps.length) return '<div class="body" style="color:var(--fg-faint)">-</div>';
+      var circled = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮";
+      return '<div class="body">'+steps.map(function(s,i){ return (circled[i]||((i+1)+".")) + " " + renderRich(s); }).join("<br>")+'</div>';
+    }
+    var rows = steps.map(function(s,i){
+      return '<div class="step-row" data-step-idx="'+i+'"><span class="step-num">'+(i+1)+'.</span>'+
+        '<input class="field" type="text" data-step-field value="'+esc(s)+'">'+
+        '<button type="button" class="btn icon-btn btn-danger" data-step-remove="'+i+'">✕</button></div>';
+    }).join("");
+    return '<div class="steps-list">'+rows+'</div>'+
+      '<div class="hint">각 단계 칸에 커서를 두고 이미지를 복사해 Ctrl/Cmd+V로 붙여넣을 수 있습니다</div>'+
+      '<button type="button" class="btn btn-sm" id="btn-add-step" style="margin-top:8px">+ 단계 추가</button>';
+  }
+
+  function ruleEditorHtml(rule){
+    rule = normalizeRule(rule);
+    var modeChips = '<div class="chiprow" style="margin:0 0 8px">'+
+      '<button type="button" class="chip'+(rule.mode==="freq"?" active":"")+'" data-rule-mode="freq">주기 기준</button>'+
+      '<button type="button" class="chip'+(rule.mode==="months"?" active":"")+'" data-rule-mode="months">특정월 선택(중복 가능)</button>'+
+    '</div>';
+    var body;
+    if(rule.mode==="months"){
+      var monthChips = "";
+      for(var m=1;m<=12;m++){
+        var on = (rule.months||[]).indexOf(m)!==-1;
+        monthChips += '<button type="button" class="chip'+(on?" active":"")+'" data-rule-month="'+m+'">'+m+'월</button>';
+      }
+      body = '<div class="chiprow" style="margin:0">'+monthChips+'</div>';
+    } else {
+      var freqOpts = FREQ_OPTIONS.map(function(f){return '<option'+(rule.freq===f?" selected":"")+'>'+f+'</option>';}).join("");
+      var offsetDisabled = (rule.freq==="매월"||rule.freq==="수시") ? " disabled" : "";
+      var dayTypeOpts = DAY_TYPE_OPTIONS.map(function(o){
+        var dis = (o.key==="말달" && !(rule.freq==="분기"||rule.freq==="반기"||rule.freq==="연간")) ? " disabled" : "";
+        return '<option value="'+o.key+'"'+(rule.day_type===o.key?" selected":"")+dis+'>'+o.label+'</option>';
+      }).join("");
+      body = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+        '<select class="field" style="width:auto" data-rule-freq>'+freqOpts+'</select>'+
+        '<select class="field" style="width:auto" data-rule-offset'+offsetDisabled+'><option value="당월"'+(rule.offset==="당월"?" selected":"")+'>당월</option><option value="익월"'+(rule.offset==="익월"?" selected":"")+'>익월</option></select>'+
+        '<select class="field" style="width:auto" data-rule-daytype>'+dayTypeOpts+'</select>'+
+        (rule.day_type==="day" ? '<input class="field" type="number" min="1" max="31" style="width:70px" data-rule-dayvalue value="'+(rule.day_value||"")+'" placeholder="일">' : '')+
+        '<label style="display:flex;align-items:center;gap:4px;font-size:13px"><input type="checkbox" data-rule-until '+(rule.until?"checked":"")+'> 까지</label>'+
+      '</div>';
+    }
+    var preview = ruleLabel(rule);
+    return '<div class="box ref" style="margin-bottom:10px"><div class="box-title">📅 연간계획 연동 설정</div>'+modeChips+body+
+      (preview?'<div class="hint" style="margin-top:8px">미리보기: <b>'+esc(preview)+'</b> → 연간업무계획에 이 월로 표시됩니다</div>':'<div class="hint" style="margin-top:8px">수시 업무는 연간업무계획에 표시되지 않습니다</div>')+
+    '</div>';
+  }
+
+  function ruleViewHtml(rule){
+    rule = normalizeRule(rule);
+    var label = ruleLabel(rule);
+    var months = monthsFromRule(rule);
+    return '<div class="box ref" style="margin-bottom:10px"><div class="box-title">📅 연간계획 연동</div><div class="body">'+
+      (label?esc(label)+'<br>':'')+
+      (months.length?('적용 월: '+months.map(function(mo){return mo+"월";}).join(", ")):'연간업무계획에 표시되지 않음(수시)')+
+    '</div></div>';
+  }
+
+  function scheduleSection(){
+    var lines = (card.schedule||"").split("\n").filter(Boolean);
+    if(editMode){
+      return ruleEditorHtml(draft.schedule_rule)+
+        '<textarea class="field" data-field="schedule" rows="3" placeholder="구분 | 시기 | 비고 (추가 메모/예외사항)">'+esc(card.schedule||"")+'</textarea><div class="hint">줄마다 "구분 | 시기 | 비고" 형식으로 입력 — 참고용 메모이며, 연간업무계획 반영은 위 "연동 설정"을 따릅니다</div>';
+    }
+    var ruleHtml = ruleViewHtml(card.schedule_rule);
+    if(!lines.length) return ruleHtml;
+    var trs = lines.map(function(l){
+      var cells = l.split("|").map(function(s){return s.trim();});
+      while(cells.length<3) cells.push("-");
+      return '<tr><td>'+esc(cells[0])+'</td><td>'+esc(cells[1])+'</td><td>'+esc(cells[2])+'</td></tr>';
+    }).join("");
+    return ruleHtml+'<table class="sched-table"><thead><tr><th>구분</th><th>시기</th><th>비고</th></tr></thead><tbody>'+trs+'</tbody></table>';
+  }
+
+  function imagesSection(){
+    var imgs = card.images||[];
+    var tiles = imgs.map(function(im,i){
+      var cap = editMode
+        ? '<input type="text" data-img-caption="'+i+'" value="'+esc(im.caption||"")+'" placeholder="설명(선택)">'
+        : (im.caption ? '<span class="cap-text">'+esc(im.caption)+'</span>' : '');
+      var del = editMode ? '<div class="img-actions"><button type="button" class="btn icon-btn btn-danger" data-img-remove="'+i+'">삭제</button></div>' : '';
+      var imgUrl = resolveAttachmentUrl(im.id, im.file) || im.url || "";
+      var imgTag = imgUrl ? '<img src="'+esc(imgUrl)+'" alt="'+esc(im.caption||"첨부 이미지")+'" loading="lazy">' : '<div class="img-loading">불러오는 중…</div>';
+      return '<div class="img-card">'+imgTag+'<div class="cap">'+cap+'</div>'+del+'</div>';
+    }).join("");
+    var addTile = editMode ? '<label class="add-tile">+ 이미지 추가<input type="file" accept="image/*" id="img-upload-input" style="display:none"></label>' : "";
+    if(!imgs.length && !editMode) return '<div class="body" style="color:var(--fg-faint)">등록된 이미지가 없습니다</div>';
+    return '<div class="img-grid">'+tiles+addTile+'</div>';
+  }
+
+  var sectionRenderers = {
+    keywords: function(){ return textField("keywords", false, "세미콜론(;)으로 구분") + (editMode?'<div class="hint">세미콜론(;)으로 구분</div>':''); },
+    purpose: function(){ return textField("purpose", true); },
+    result: resultSection,
+    flow: function(){ return textField("flow", true, "① 단계 → ② 단계") + (editMode?'<div class="hint">" → "로 단계 구분</div>':''); },
+    detail: detailSection,
+    submit: function(){
+      var SUBMIT_ROWS = [
+        {key:"dest", label:"제출처", field:"submit_dest"},
+        {key:"way", label:"제출방법", field:"submit_way"},
+        {key:"deadline", label:"제출기한", field:"submit_deadline"},
+        {key:"attach", label:"첨부서류", field:"submit_attach"},
+        {key:"storage", label:"보관방법", field:"submit_storage"},
+        {key:"law", label:"관련 법령", field:"submit_law"}
+      ];
+      var vis = Object.assign({dest:true,way:true,deadline:true,attach:true,storage:true,law:true}, card.submit_visible||{});
+      if(editMode){
+        var rows = SUBMIT_ROWS.map(function(r){
+          var inputHtml = (r.key==="law")
+            ? '<div class="law-picker">'+
+                '<select data-law-pick class="field">'+
+                  '<option value="">▾ 목록에서 추가…</option>'+
+                  (VOCAB.laws||[]).map(function(l){return '<option value="'+esc(l)+'">'+esc(l)+'</option>';}).join("")+
+                '</select>'+
+                '<input class="field" data-field="submit_law" value="'+esc(card.submit_law)+'" placeholder="직접 입력 (여러 개는 ; 로 구분)">'+
+              '</div>'
+            : '<input class="field" data-field="'+r.field+'" value="'+esc(card[r.field])+'">';
+          return '<dt><label class="row-vis"><input type="checkbox" data-submit-vis="'+r.key+'"'+(vis[r.key]?" checked":"")+'> '+r.label+'</label></dt><dd>'+inputHtml+'</dd>';
+        }).join("");
+        return '<div class="kv">'+rows+'</div><div class="hint">체크를 해제한 항목은 보기 화면에서 숨겨집니다</div>';
+      }
+      var shownRows = SUBMIT_ROWS.filter(function(r){ return vis[r.key]; }).map(function(r){
+        return '<dt>'+r.label+'</dt><dd>'+esc(card[r.field]||"-")+'</dd>';
+      }).join("");
+      if(!shownRows) return '<div class="body" style="color:var(--fg-faint)">표시할 제출정보 항목이 없습니다</div>';
+      return '<dl class="kv">'+shownRows+'</dl>';
+    },
+    schedule: scheduleSection,
+    images: imagesSection,
+    caution_ref: function(){
+      return '<div class="box-grid">'+
+        '<div class="box warn"><div class="box-title">⚠ 주의</div>'+(editMode?'<textarea class="field" data-field="caution" rows="3">'+esc(card.caution)+'</textarea>':'<div class="body">'+nl2br(card.caution||"-")+'</div>')+'</div>'+
+        '<div class="box ref"><div class="box-title">📎 참고</div>'+(editMode?'<textarea class="field" data-field="reference" rows="3">'+esc(card.reference)+'</textarea>':'<div class="body">'+nl2br(card.reference||"-")+'</div>')+'</div>'+
+        '</div>';
+    }
+  };
+
+  var order = (editMode?draft.sectionOrder:card.sectionOrder) || DEFAULT_ORDER;
+  var sectionsHtml = order.map(function(key){
+    if(!sectionRenderers[key]) return "";
+    return secWrap(key, sectionRenderers[key]());
+  }).join("");
+
+  var filesHtml = (function(){
+    var files = card.files||[];
+    var rows = files.map(function(f,i){
+      var del = (canWrite) ? '<button type="button" class="btn icon-btn btn-danger" data-file-remove="'+i+'">삭제</button>' : "";
+      var furl = resolveAttachmentUrl(f.id, f.file);
+      var nameHtml = furl
+        ? '<a class="fname" href="'+esc(furl)+'" download="'+esc(f.name)+'">'+esc(f.name)+'</a>'
+        : '<span class="fname" style="color:var(--fg-faint)">'+esc(f.name)+' (불러오는 중…)</span>';
+      return '<div class="file-row"><span>📄</span>'+nameHtml+'<span class="fsize">'+esc(fmtSize(f.sizeBytes))+'</span>'+del+'</div>';
+    }).join("");
+    var addRow = canWrite ? '<label class="btn btn-sm" style="width:fit-content">+ 파일 추가<input type="file" id="file-upload-input" style="display:none"></label>' : "";
+    return '<div class="sec'+(files.length?'':' print-skip')+'"><h3><span class="label">첨부파일</span></h3>'+
+      (rows || '<div class="body" style="color:var(--fg-faint);margin-bottom:8px">첨부된 파일이 없습니다</div>')+
+      (rows?'<div style="height:8px"></div>':'')+ addRow + '</div>';
+  })();
+
+  app.innerHTML =
+    '<div class="gutter">'+
+    '<div class="card-nav">'+
+      '<a class="btn" href="#toc">← 목차</a>'+
+      (isNew?'':navBtn(prevId,"← 이전 카드")+navBtn(nextId,"다음 카드 →"))+
+      '<span class="spacer"></span>'+
+      ((isNew||editMode)?'':'<button class="btn btn-sm" id="btn-print" title="A4 한 장 기준으로 인쇄하거나 PDF로 저장합니다">🖨 인쇄/PDF</button>')+
+      (isNew?'':'<button class="btn btn-sm" id="btn-log">📜 로그</button>')+
+      (canWrite?
+        (editMode
+          ? '<button class="btn btn-ghost" id="btn-cancel">취소</button><button class="btn btn-primary" id="btn-save">저장</button>'
+          : '<button class="btn" id="btn-edit">✎ 수정</button><button class="btn btn-danger" id="btn-delete">'+(deleteArmed?"정말 삭제할까요?":"🗑 삭제")+'</button>'+(deleteArmed?'<button class="btn" id="btn-delete-cancel">취소</button>':''))
+        : '<span class="readonly-note">보기 전용</span>')+
+    '</div>'+
+    '<div class="card-sheet">'+
+      '<div class="card-strip" style="background:'+pColor+'1a">'+
+        '<div class="left">'+
+          (editMode?'<select data-field="period">'+periodOpts+'</select>':'<span class="badge" style="background:'+pColor+'">'+esc(card.period)+'</span>')+
+          '<span class="no tnum">'+esc(card.no)+'</span>'+
+        '</div>'+
+        (editMode?'<select data-field="kpi">'+kpiOpts+'</select>':'<span class="badge" style="background:'+kColor+'">'+esc(card.kpi)+'</span>')+
+      '</div>'+
+      '<div class="card-head">'+
+        (editMode?'<div style="font-size:12px;color:var(--fg-muted);margin-bottom:4px">분류: <select data-field="category">'+catOpts+'</select></div>':'<div style="font-size:12px;color:var(--fg-muted);margin-bottom:4px">'+esc(card.category)+'</div>')+
+        '<h2>'+(editMode?'<input data-field="title" type="text" value="'+esc(card.title)+'">':esc(card.title))+'</h2>'+
+        '<div class="chips">'+
+          '<span class="chip-item">👤 '+(editMode?'<input class="field" style="width:120px" list="dl-owner" data-field="owner" value="'+esc(card.owner)+'"><datalist id="dl-owner">'+VOCAB.owners.map(function(o){return '<option value="'+esc(o)+'">';}).join("")+'</datalist>':esc(card.owner||"-"))+'</span>'+
+          '<span class="chip-item">'+(editMode?
+            '<span class="star-pick" id="starpick">'+[1,2,3,4,5].map(function(n){return '<span data-n="'+n+'" class="'+(n<=stars?"on":"")+'">★</span>';}).join("")+'</span>'
+            : '<span class="stars">'+"★".repeat(stars)+"☆".repeat(5-stars)+'</span>')+'</span>'+
+          '<span class="chip-item">🕐 '+(editMode?'<input class="field" style="width:90px" data-field="duration" value="'+esc(card.duration)+'">':esc(card.duration||"-"))+'</span>'+
+          '<span class="chip-item">🏢 '+(editMode?'<input class="field" style="width:180px" list="dl-dept" data-field="dept" value="'+esc(card.dept)+'"><datalist id="dl-dept">'+VOCAB.depts.map(function(d){return '<option value="'+esc(d)+'">';}).join("")+'</datalist>':esc(card.dept||"-"))+'</span>'+
+        '</div>'+
+      '</div>'+
+      sectionsHtml+
+      filesHtml+
+      (isNew?'':doneBlockHtml(card))+
+      '<div class="print-only print-foot"><span>'+esc(card.no)+' · 오봉관리역 서무 스마트잡카드</span><span class="print-stamp">출력일시: '+esc(fmtTs(new Date().toISOString()))+'</span></div>'+
+      (editMode?'<div class="edit-actions"><button class="btn btn-ghost" id="btn-cancel2">취소</button><button class="btn btn-primary" id="btn-save2">저장</button></div>':'')+
+    '</div>'+
+    (logPanelOpen ? logOverlayHtml(card) : '')+
+    '</div>';
+
+  wireCardEvents(id, isNew, card);
+}
+
+function logOverlayHtml(card){
+  var logs = (card.logs||[]).slice().reverse();
+  var items = logs.map(function(l){
+    var detailsHtml = (l.details && l.details.length)
+      ? '<div class="log-details">'+l.details.map(function(d){
+          return '<div class="log-detail"><b>'+esc(d.label)+'</b>: '+esc(d.from)+' → '+esc(d.to)+'</div>';
+        }).join("")+'</div>'
+      : '';
+    return '<div class="log-entry"><div class="log-entry-head">'+esc(l.summary)+'<span class="ts">'+fmtTs(l.ts)+'</span></div>'+detailsHtml+'</div>';
+  }).join("");
+  return '<div class="log-overlay" id="log-overlay"><div class="log-panel"><h3>변경 로그</h3>'+(items||'<div class="body" style="color:var(--fg-faint)">기록 없음</div>')+'<button class="btn" id="btn-log-close" style="margin-top:12px">닫기</button></div></div>';
+}
+
+function wireCardEvents(id, isNew, card){
+  var app = document.getElementById("app");
+
+  // files: available whether or not the card is in text-edit mode
+  wireFileUpload(card, id, isNew);
+
+  var printBtn = document.getElementById("btn-print");
+  if(printBtn) printBtn.addEventListener("click", function(){ window.print(); });
+  app.querySelectorAll("[data-done-toggle]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var k = b.getAttribute("data-done-toggle");
+      setOccDone(card, k, !isDoneKey(card, k));
+      renderCardShell(id, isNew);
+    });
+  });
+  app.querySelectorAll("[data-done-memo]").forEach(function(inp){
+    inp.addEventListener("change", function(){
+      var k = inp.getAttribute("data-done-memo");
+      if(isDoneKey(card, k)){ setOccDone(card, k, true, inp.value); }
+    });
+  });
+
+  app.querySelectorAll('[data-nav]').forEach(function(b){ b.addEventListener("click", function(){ editMode=false; draft=null; logPanelOpen=false; location.hash="card/"+encodeURIComponent(b.getAttribute("data-nav")); }); });
+
+  var logBtn = document.getElementById("btn-log");
+  if(logBtn) logBtn.addEventListener("click", function(){ logPanelOpen=true; renderCardShell(id,isNew); });
+  var logClose = document.getElementById("btn-log-close");
+  if(logClose) logClose.addEventListener("click", function(){ logPanelOpen=false; renderCardShell(id,isNew); });
+  var logOverlay = document.getElementById("log-overlay");
+  if(logOverlay) logOverlay.addEventListener("click", function(e){ if(e.target===logOverlay){ logPanelOpen=false; renderCardShell(id,isNew); } });
+
+  if(!editMode){
+    var editBtn = document.getElementById("btn-edit");
+    if(editBtn) editBtn.addEventListener("click", function(){ editMode=true; draft=JSON.parse(JSON.stringify(card)); draft.schedule_rule = normalizeRule(draft.schedule_rule); renderCardShell(id,isNew); });
+    var delBtn = document.getElementById("btn-delete");
+    if(delBtn) delBtn.addEventListener("click", function(){
+      if(!deleteArmed){ deleteArmed=true; renderCardShell(id,isNew); return; }
+      card.deleted = true;
+      card.deletedAt = new Date().toISOString();
+      persistCard(card, "카드 삭제 (휴지통으로 이동)");
+      showToast("카드를 휴지통으로 이동했습니다 — 휴지통에서 복구할 수 있습니다");
+      location.hash = "toc";
+    });
+    var delCancel = document.getElementById("btn-delete-cancel");
+    if(delCancel) delCancel.addEventListener("click", function(){ deleteArmed=false; renderCardShell(id,isNew); });
+    return;
+  }
+
+  // ---- edit mode wiring ----
+  app.querySelectorAll("[data-field]").forEach(function(el){
+    var f = el.getAttribute("data-field");
+    el.addEventListener("input", function(){ draft[f] = el.value; });
+    el.addEventListener("change", function(){ draft[f] = el.value; });
+  });
+  // submit-info row visibility toggles
+  app.querySelectorAll("[data-submit-vis]").forEach(function(cb){
+    cb.addEventListener("change", function(){
+      draft.submit_visible = draft.submit_visible || {};
+      draft.submit_visible[cb.getAttribute("data-submit-vis")] = cb.checked;
+    });
+  });
+  // remember any newly-typed law/regulation so it appears in the picker next time
+  var lawInput = app.querySelector('[data-field="submit_law"]');
+  if(lawInput) lawInput.addEventListener("change", function(){
+    String(lawInput.value||"").split(/[;,\/·\n]/).forEach(function(t){ addVocab("laws", t); });
+  });
+  // "관련 법령" list picker: choosing an option appends it into the free-text field
+  var lawPick = app.querySelector("[data-law-pick]");
+  if(lawPick) lawPick.addEventListener("change", function(){
+    var v = lawPick.value;
+    if(!v) return;
+    var cur = String(draft.submit_law||"").trim();
+    var parts = cur ? cur.split(/;\s*/).filter(Boolean) : [];
+    if(parts.indexOf(v)===-1) parts.push(v);
+    draft.submit_law = parts.join("; ");
+    addVocab("laws", v);
+    lawPick.value = "";
+    if(lawInput) lawInput.value = draft.submit_law;
+  });
+  var sp = document.getElementById("starpick");
+  if(sp) sp.querySelectorAll("span").forEach(function(s){
+    s.addEventListener("click", function(){ draft.importance = parseInt(s.getAttribute("data-n"),10); renderCardShell(id,isNew); });
+  });
+
+  // result checkboxes
+  app.querySelectorAll("[data-check]").forEach(function(cb){
+    cb.addEventListener("change", function(){
+      draft.result_checks = draft.result_checks || {};
+      draft.result_checks[cb.getAttribute("data-check")] = cb.checked;
+    });
+  });
+  var etc = document.getElementById("result-etc");
+  if(etc) etc.addEventListener("input", function(){ draft.result_etc = etc.value; });
+
+  // detail steps
+  app.querySelectorAll("[data-step-field]").forEach(function(inp, i){
+    wirePasteImage(inp);
+    inp.addEventListener("input", function(){ draft.detail_steps[i] = inp.value; });
+  });
+  app.querySelectorAll("[data-step-remove]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var i = parseInt(btn.getAttribute("data-step-remove"),10);
+      draft.detail_steps.splice(i,1);
+      renderCardShell(id,isNew);
+    });
+  });
+  var addStepBtn = document.getElementById("btn-add-step");
+  if(addStepBtn) addStepBtn.addEventListener("click", function(){
+    draft.detail_steps = draft.detail_steps||[];
+    draft.detail_steps.push("");
+    renderCardShell(id,isNew);
+  });
+
+  // section reorder
+  app.querySelectorAll("[data-move-up]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var k = btn.getAttribute("data-move-up");
+      var o = draft.sectionOrder, i = o.indexOf(k);
+      if(i>0){ o.splice(i,1); o.splice(i-1,0,k); renderCardShell(id,isNew); }
+    });
+  });
+  app.querySelectorAll("[data-move-down]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var k = btn.getAttribute("data-move-down");
+      var o = draft.sectionOrder, i = o.indexOf(k);
+      if(i<o.length-1){ o.splice(i,1); o.splice(i+1,0,k); renderCardShell(id,isNew); }
+    });
+  });
+
+  // images
+  app.querySelectorAll("[data-img-caption]").forEach(function(inp){
+    var i = parseInt(inp.getAttribute("data-img-caption"),10);
+    inp.addEventListener("input", function(){ draft.images[i].caption = inp.value; });
+  });
+  app.querySelectorAll("[data-img-remove]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var i = parseInt(btn.getAttribute("data-img-remove"),10);
+      draft.images.splice(i,1);
+      renderCardShell(id,isNew);
+    });
+  });
+  var imgInput = document.getElementById("img-upload-input");
+  if(imgInput) imgInput.addEventListener("change", function(){
+    var file = imgInput.files && imgInput.files[0];
+    if(!file) return;
+    var bid = uid();
+    var entry = storeAttachment(bid, file);
+    entry.caption = "";
+    draft.images = draft.images||[];
+    draft.images.push(entry);
+    renderCardShell(id,isNew);
+    showToast("이미지가 추가되었습니다");
+  });
+
+  app.querySelectorAll("textarea.field").forEach(function(ta){ wirePasteImage(ta); });
+
+  // schedule rule editor
+  draft.schedule_rule = normalizeRule(draft.schedule_rule);
+  app.querySelectorAll("[data-rule-mode]").forEach(function(b){
+    b.addEventListener("click", function(){ draft.schedule_rule.mode = b.getAttribute("data-rule-mode"); renderCardShell(id,isNew); });
+  });
+  var rf = app.querySelector("[data-rule-freq]");
+  if(rf) rf.addEventListener("change", function(){ draft.schedule_rule.freq = rf.value; renderCardShell(id,isNew); });
+  var ro = app.querySelector("[data-rule-offset]");
+  if(ro) ro.addEventListener("change", function(){ draft.schedule_rule.offset = ro.value; renderCardShell(id,isNew); });
+  var rd = app.querySelector("[data-rule-daytype]");
+  if(rd) rd.addEventListener("change", function(){ draft.schedule_rule.day_type = rd.value; renderCardShell(id,isNew); });
+  var rv = app.querySelector("[data-rule-dayvalue]");
+  if(rv) rv.addEventListener("input", function(){ draft.schedule_rule.day_value = parseInt(rv.value,10)||null; var p=document.querySelector(".box.ref .hint b"); if(p) p.textContent = ruleLabel(draft.schedule_rule); });
+  var ru = app.querySelector("[data-rule-until]");
+  if(ru) ru.addEventListener("change", function(){ draft.schedule_rule.until = ru.checked; renderCardShell(id,isNew); });
+  app.querySelectorAll("[data-rule-month]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var mo = parseInt(b.getAttribute("data-rule-month"),10);
+      draft.schedule_rule.months = draft.schedule_rule.months||[];
+      var i = draft.schedule_rule.months.indexOf(mo);
+      if(i===-1) draft.schedule_rule.months.push(mo); else draft.schedule_rule.months.splice(i,1);
+      renderCardShell(id,isNew);
+    });
+  });
+
+  ["btn-cancel","btn-cancel2"].forEach(function(bid){
+    var b=document.getElementById(bid); if(b) b.addEventListener("click", function(){
+      editMode=false; draft=null;
+      if(isNew){ location.hash="toc"; } else { renderCardShell(id,isNew); }
+    });
+  });
+  ["btn-save","btn-save2"].forEach(function(bid){
+    var b=document.getElementById(bid); if(b) b.addEventListener("click", function(){ saveCard(id, isNew); });
+  });
+}
+
+function wireFileUpload(card, id, isNew){
+  var fileInput = document.getElementById("file-upload-input");
+  if(!fileInput) return;
+  fileInput.addEventListener("change", function(){
+    var file = fileInput.files && fileInput.files[0];
+    if(!file) return;
+    var bid = uid();
+    var entry = storeAttachment(bid, file);
+    entry.name = file.name; entry.contentType = file.type; entry.sizeBytes = file.size;
+    var target = editMode ? draft : card;
+    target.files = target.files||[];
+    target.files.push(entry);
+    if(!editMode){ persistCard(card, "파일 첨부: "+file.name); }
+    renderCardShell(id,isNew);
+    showToast("파일이 추가되었습니다");
+  });
+  app_delegateFileRemove(card);
+}
+
+function wirePasteImage(textarea){
+  var isMultiline = textarea.tagName === "TEXTAREA";
+  textarea.addEventListener("paste", function(e){
+    var items = (e.clipboardData && e.clipboardData.items) || [];
+    for(var i=0;i<items.length;i++){
+      if(items[i].type && items[i].type.indexOf("image/")===0){
+        e.preventDefault();
+        var file = items[i].getAsFile();
+        if(!file) continue;
+        var bid = uid();
+        var entry = storeAttachment(bid, file);
+        var token = entry.file ? "[[img:"+bid+"|"+entry.file+"]]" : "[[img:"+bid+"]]";
+        var start = textarea.selectionStart, end = textarea.selectionEnd;
+        var v = textarea.value;
+        var ins, newPos;
+        if(isMultiline){
+          ins = "\n"+token+"\n";
+          newPos = start + token.length + 2;
+        } else {
+          // single-line input: avoid embedded newlines, just pad with spaces as needed
+          var pre = (start>0 && v.charAt(start-1)!==" ") ? " " : "";
+          var post = (end<v.length && v.charAt(end)!==" ") ? " " : "";
+          ins = pre+token+post;
+          newPos = start + ins.length;
+        }
+        textarea.value = v.slice(0,start)+ins+v.slice(end);
+        textarea.selectionStart = textarea.selectionEnd = newPos;
+        textarea.dispatchEvent(new Event("input"));
+        showToast("이미지가 삽입되었습니다");
+        break;
+      }
+    }
+  });
+}
+function app_delegateFileRemove(card){
+  document.querySelectorAll("[data-file-remove]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var i = parseInt(btn.getAttribute("data-file-remove"),10);
+      var target = editMode ? draft : card;
+      target.files.splice(i,1);
+      if(!editMode){ persistCard(card, "첨부파일 삭제"); }
+      renderCardShell(card.id, false);
+    });
+  });
+}
+
+function truncVal(v){
+  if(Array.isArray(v)) v = v.filter(Boolean).join(" / ");
+  else if(v && typeof v === "object") v = JSON.stringify(v);
+  v = String(v==null?"":v).replace(/\s+/g," ").trim();
+  if(!v) return "(비어있음)";
+  return v.length>70 ? v.slice(0,70)+"…" : v;
+}
+function diffSummary(oldCard, newCard){
+  var fields = {title:"업무명",category:"분류",owner:"담당자",dept:"관련부서",duration:"소요시간",period:"주기",kpi:"성과지표",
+    keywords:"공문 키워드",purpose:"업무 목적",flow:"업무 처리 절차",submit_dest:"제출처",submit_way:"제출방법",
+    submit_deadline:"제출기한",submit_attach:"첨부서류",submit_storage:"보관방법",submit_law:"관련법령",
+    schedule:"업무 일정 기준",caution:"주의사항",reference:"참고자료",importance:"중요도"};
+  var details = [];
+  Object.keys(fields).forEach(function(f){
+    if(JSON.stringify(oldCard[f])!==JSON.stringify(newCard[f])){
+      details.push({label:fields[f], from:truncVal(oldCard[f]), to:truncVal(newCard[f])});
+    }
+  });
+  if(JSON.stringify(oldCard.result_checks)!==JSON.stringify(newCard.result_checks) || oldCard.result_etc!==newCard.result_etc){
+    var oldChecked = CHECK_OPTIONS.filter(function(o){return (oldCard.result_checks||{})[o.key];}).map(function(o){return o.key;}).join(", ");
+    var newChecked = CHECK_OPTIONS.filter(function(o){return (newCard.result_checks||{})[o.key];}).map(function(o){return o.key;}).join(", ");
+    details.push({
+      label:"결과처리 방식",
+      from: truncVal((oldChecked||"(없음)")+(oldCard.result_etc?(" / "+oldCard.result_etc):"")),
+      to: truncVal((newChecked||"(없음)")+(newCard.result_etc?(" / "+newCard.result_etc):""))
+    });
+  }
+  if(JSON.stringify(oldCard.detail_steps)!==JSON.stringify(newCard.detail_steps)){
+    details.push({label:"상세 처리 방법", from:truncVal(oldCard.detail_steps), to:truncVal(newCard.detail_steps)});
+  }
+  if(JSON.stringify(oldCard.images)!==JSON.stringify(newCard.images)){
+    details.push({label:"이미지", from:(oldCard.images||[]).length+"개", to:(newCard.images||[]).length+"개"});
+  }
+  if(JSON.stringify(oldCard.files)!==JSON.stringify(newCard.files)){
+    details.push({label:"첨부파일", from:(oldCard.files||[]).length+"개", to:(newCard.files||[]).length+"개"});
+  }
+  if(JSON.stringify(oldCard.sectionOrder)!==JSON.stringify(newCard.sectionOrder)){
+    details.push({label:"항목 순서", from:"변경 전 순서", to:"변경 후 순서"});
+  }
+  if(JSON.stringify(oldCard.schedule_rule)!==JSON.stringify(newCard.schedule_rule)){
+    var ol="",nl="";
+    try{ ol = ruleLabel(oldCard.schedule_rule)||"(미설정)"; }catch(e){ ol="(미설정)"; }
+    try{ nl = ruleLabel(newCard.schedule_rule)||"(미설정)"; }catch(e){ nl="(미설정)"; }
+    details.push({label:"연간계획 연동 설정", from:ol, to:nl});
+  }
+  if(JSON.stringify(oldCard.submit_visible)!==JSON.stringify(newCard.submit_visible)){
+    details.push({label:"제출정보 표시 항목", from:"변경 전 설정", to:"변경 후 설정"});
+  }
+  var summary = details.length ? details.map(function(d){return d.label;}).join(", ")+" 수정" : "수정됨";
+  return {summary:summary, details:details};
+}
+
+function saveCard(id, isNew){
+  var newCard = draft;
+  addVocab("categories", newCard.category);
+  addVocabMulti("owners", newCard.owner);
+  addVocabMulti("depts", newCard.dept);
+
+  if(isNew){
+    newCard.logs = [{ts:new Date().toISOString(), summary:"카드 생성"}];
+    newCard.updatedAt = new Date().toISOString();
+    CARDS.push(newCard);
+    snapCard(newCard);
+    if(idb && canWrite){ idbPut("cards", newCard).catch(function(){ showToast("저장 실패 — 브라우저 저장소를 확인해 주세요"); }); }
+    editMode=false; draft=null;
+    showToast("카드가 생성되었습니다");
+    location.hash = "card/"+encodeURIComponent(newCard.id);
+    return;
+  }
+
+  var oldCard = byId(id);
+  var diff = diffSummary(oldCard, newCard);
+  var idx = CARDS.findIndex(function(c){return c.id===id;});
+  CARDS[idx] = newCard;
+  persistCard(newCard, diff.summary, diff.details);
+  editMode = false; draft = null;
+  renderCardShell(id, false);
+  showToast("저장되었습니다");
+}
+
+var toastTimer=null;
+function showToast(msg){
+  var t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 2400);
+}
+
+/* ---------- boot: fully offline, IndexedDB-backed (no server, no network) ---------- */
+/* Returning users already have CARDS/VOCAB saved locally (or in a shared
+   folder), and that saved data is always preferred over the file's bundled
+   SEED_* content on boot — otherwise every edit would be wiped on reload.
+   But that also means a newer HTML file's improvements (e.g. an updated
+   관련 법령 picker list, or newly-filled-in 관련 법령 values) silently never
+   reach someone who already has local data. This runs once per boot to pull
+   those additions forward without ever touching a field the person already
+   customized themselves. */
+function migrateForwardFromSeed(){
+  var vocabChanged = false;
+  Object.keys(SEED_VOCAB||{}).forEach(function(kind){
+    if(!Array.isArray(SEED_VOCAB[kind])) return;
+    VOCAB[kind] = VOCAB[kind] || [];
+    SEED_VOCAB[kind].forEach(function(v){
+      if(VOCAB[kind].indexOf(v)===-1){ VOCAB[kind].push(v); vocabChanged = true; }
+    });
+    if(vocabChanged) VOCAB[kind].sort(function(a,b){return a.localeCompare(b,'ko');});
+  });
+  if(vocabChanged) persistVocab();
+
+  var cardsChanged = false;
+  var seedById = {};
+  (SEED_CARDS||[]).forEach(function(c){ seedById[c.id] = c; });
+  (CARDS||[]).forEach(function(c){
+    var seed = seedById[c.id];
+    if(!seed) return;
+    var cur = String(c.submit_law||"").trim();
+    if((cur==="" || cur==="-") && seed.submit_law && seed.submit_law!=="-"){
+      c.submit_law = seed.submit_law;
+      cardsChanged = true;
+    }
+  });
+  if(cardsChanged && idb && canWrite){
+    CARDS.forEach(function(c){ idbPut("cards", c).catch(function(){}); });
+  }
+  if(vocabChanged || cardsChanged){
+    setTimeout(function(){ showToast("새 법령/규정 목록과 업데이트된 내용을 불러왔습니다"); }, 600);
+  }
+}
+
+/* ================= 온라인판: 클라우드(Firebase) 저장 · 실시간 동기화 =================
+   설정(window.__SMARTJOB_CLOUD__)이 없거나 Firebase SDK가 없으면 아무 일도 하지 않습니다(오프라인 파일 그대로).
+   - 이 기기의 저장소(IndexedDB)가 기본이고, 로그인하면 클라우드와 항목별로 합쳐 양쪽을 맞춥니다.
+   - 카드: cards/{id}  · 어휘: meta/vocab  · 일정: events/{id}  · 이미지: blobs/{id} (700KB 이하로 줄여 저장) */
+var CLOUD_CFG = (typeof window!=="undefined" && window.__SMARTJOB_CLOUD__) || null;
+var cloud = {on:false, user:null, db:null, auth:null, ready:false, applying:false, queue:{}, timer:null, lastJson:{}, blobSent:{}, blobPending:{}, status:"off", unsubs:[], vocabTimer:null, localOnly:false, bigWarned:false};
+var CLOUD_BLOB_MAX = 700*1024;
+function cloudAvailable(){ return !!(CLOUD_CFG && CLOUD_CFG.firebaseConfig && typeof window.firebase!=="undefined"); }
+function cloudDocId(id){ return String(id).replace(/[\/\s]+/g,"_"); }
+function cloudParse(doc){
+  try{ var d = doc.data ? doc.data() : doc; var c = JSON.parse(d.json); return (c && c.id) ? c : null; }catch(e){ return null; }
+}
+function cloudSetStatus(st, msg){
+  cloud.status = st; cloud.msg = msg||"";
+  var el = document.getElementById("cloud-badge");
+  if(!cloud.on){ if(el) el.remove(); return; }
+  if(!el){
+    el = document.createElement("button"); el.type = "button"; el.id = "cloud-badge";
+    el.addEventListener("click", openCloudMenu);
+    document.body.appendChild(el);
+  }
+  var map = {sync:["☁ 동기화 중…",""], ok:["☁ 온라인 저장됨","ok"], wait:["☁ 대기 중 (연결 확인)","warn"], error:["⚠ 클라우드 오류","bad"], login:["☁ 로그인 필요","warn"], local:["☁ 이 기기에서만 저장","warn"]};
+  var m = map[st] || map.sync;
+  el.className = m[1]; el.textContent = m[0]; el.title = cloud.msg || "";
+}
+function cloudShowLogin(msg){
+  var o = document.getElementById("cloud-login");
+  if(!o){
+    o = document.createElement("div"); o.id = "cloud-login"; o.className = "log-overlay";
+    document.body.appendChild(o);
+  }
+  o.style.alignItems = "center";
+  o.innerHTML = '<div class="log-panel" style="max-width:380px;text-align:center"><h3 style="font-size:17px">☁ 오봉관리역 서무 스마트잡카드</h3>'+
+    '<p style="color:var(--fg-muted);font-size:13.5px;margin:8px 0 14px">로그인하면 컴퓨터·핸드폰 어디서든 같은 업무카드를 보고 고칠 수 있습니다.</p>'+
+    (msg?'<div class="note" style="margin-bottom:10px">'+esc(msg)+'</div>':'')+
+    '<button type="button" class="btn btn-primary" id="cloud-signin" style="width:100%;justify-content:center">구글 계정으로 로그인</button>'+
+    '<button type="button" class="btn btn-ghost" id="cloud-skip" style="width:100%;justify-content:center;margin-top:8px;font-size:12.5px">로그인 없이 이 기기에서만 사용</button></div>';
+  document.getElementById("cloud-signin").addEventListener("click", function(){
+    var prov = new firebase.auth.GoogleAuthProvider();
+    cloud.auth.signInWithPopup(prov).catch(function(e){
+      if(e && (e.code==="auth/popup-blocked" || e.code==="auth/operation-not-supported-in-this-environment")){ cloud.auth.signInWithRedirect(prov); return; }
+      if(e && e.code==="auth/popup-closed-by-user") return;
+      cloudShowLogin("로그인에 실패했습니다: "+((e&&e.code)||"알 수 없는 오류"));
+    });
+  });
+  document.getElementById("cloud-skip").addEventListener("click", function(){ cloud.localOnly = true; cloudHideLogin(); cloudSetStatus("local"); });
+}
+function cloudHideLogin(){ var o = document.getElementById("cloud-login"); if(o) o.remove(); }
+function openCloudMenu(){
+  var old = document.getElementById("cloud-menu"); if(old) old.remove();
+  var o = document.createElement("div"); o.id = "cloud-menu"; o.className = "log-overlay";
+  var who = cloud.user ? esc(cloud.user.email||"") : "로그인 안 됨";
+  o.innerHTML = '<div class="log-panel"><h3>☁ 온라인 저장</h3><p style="font-size:13.5px">계정: <b>'+who+'</b><br><span style="color:var(--fg-muted)">상태: '+esc((document.getElementById("cloud-badge")||{}).textContent||"")+'</span></p>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+
+    (cloud.user?'<button class="btn btn-sm btn-primary" id="cm-resync">지금 다시 동기화</button><button class="btn btn-sm btn-danger" id="cm-logout">로그아웃</button>':'<button class="btn btn-sm btn-primary" id="cm-login">로그인</button>')+
+    '<button class="btn btn-sm" id="cm-close">닫기</button></div></div>';
+  document.body.appendChild(o);
+  o.addEventListener("click", function(e){ if(e.target===o) o.remove(); });
+  document.getElementById("cm-close").addEventListener("click", function(){ o.remove(); });
+  var r = document.getElementById("cm-resync"); if(r) r.addEventListener("click", function(){ o.remove(); cloudStart().catch(cloudFail); });
+  var lo = document.getElementById("cm-logout"); if(lo) lo.addEventListener("click", function(){ o.remove(); cloud.auth.signOut(); });
+  var li = document.getElementById("cm-login"); if(li) li.addEventListener("click", function(){ o.remove(); cloudShowLogin(); });
+}
+function cloudInit(){
+  if(cloud.on || !cloudAvailable() || !idb) return;
+  cloud.on = true;
+  try{
+    firebase.initializeApp(CLOUD_CFG.firebaseConfig);
+    cloud.auth = firebase.auth(); cloud.db = firebase.firestore();
+  }catch(e){ cloud.on = false; return; }
+  cloudSetStatus("login");
+  cloud.auth.onAuthStateChanged(function(u){
+    cloud.user = u || null;
+    if(!u){ cloudStop(); cloudSetStatus("login"); if(!cloud.localOnly) cloudShowLogin(); return; }
+    var allowed = (CLOUD_CFG.allowed||[]).map(function(x){ return String(x).toLowerCase(); });
+    if(allowed.length && allowed.indexOf(String(u.email||"").toLowerCase())===-1){
+      cloud.auth.signOut(); cloudShowLogin("허용되지 않은 계정입니다: "+(u.email||"")); return;
+    }
+    cloud.localOnly = false; cloudHideLogin();
+    cloudStart().catch(cloudFail);
+  });
+  window.addEventListener("online", function(){ if(cloud.user) cloudResyncDiffs(); });
+}
+function cloudFail(e){
+  var code = (e && (e.code||e.message)) || "";
+  if(/permission/i.test(code)) cloudSetStatus("error", "이 계정은 접근 권한이 없습니다(보안 규칙).");
+  else if(/unavailable|network|offline/i.test(code) || (typeof navigator!=="undefined" && navigator.onLine===false)) cloudSetStatus("wait", "인터넷 연결을 확인해 주세요. 연결되면 자동으로 반영됩니다.");
+  else cloudSetStatus("error", String(code));
+}
+function cloudStop(){
+  cloud.ready = false;
+  cloud.unsubs.forEach(function(f){ try{ f(); }catch(e){} });
+  cloud.unsubs = [];
+}
+function cloudRerender(){
+  if(editMode) return;
+  var y = window.scrollY; route(); window.scrollTo(0, y);
+}
+async function cloudStart(){
+  cloudStop();
+  cloudSetStatus("sync");
+  var db = cloud.db;
+  var res = await Promise.all([db.collection("cards").get(), db.collection("meta").doc("vocab").get(), db.collection("events").get()]);
+  var cards = [], events = [], vocab = {};
+  res[0].forEach(function(d){ var c = cloudParse(d); if(c){ cards.push(c); cloud.lastJson[d.id] = d.data().json; } });
+  if(res[1].exists){ try{ vocab = JSON.parse(res[1].data().json); cloud.vocabJson = res[1].data().json; }catch(e){} }
+  res[2].forEach(function(d){ try{ events.push(JSON.parse(d.data().json)); }catch(e){} });
+  var data = {cards:cards, vocab:vocab, events:events, seqCounter:0, blobs:[]};
+  cloud.applying = true;
+  try{
+    var plan = buildSyncPlan(data);
+    await applySyncPlan(plan, data, null, {silent:true});
+  } finally { cloud.applying = false; }
+  cloud.ready = true;
+  cloudResyncDiffs();
+  cloudListen();
+  cloudSetStatus("ok");
+  cloudRerender();
+}
+function cloudResyncDiffs(){
+  if(!cloud.ready) return;
+  CARDS.forEach(function(c){ if(cloud.lastJson[cloudDocId(c.id)] !== JSON.stringify(c)) cloud.queue[c.id] = 1; });
+  cloudQueueVocab();
+  var haveEv = {};
+  (EVENTS||[]).forEach(function(e){ cloudPushEvent(e); });
+  cloudFlushSoon(50);
+}
+function cloudListen(){
+  var db = cloud.db;
+  function onErr(e){ cloudFail(e); }
+  cloud.unsubs.push(db.collection("cards").onSnapshot(function(snap){
+    var changed = [];
+    snap.docChanges().forEach(function(ch){
+      if(ch.type==="removed" || ch.doc.metadata.hasPendingWrites) return;
+      var json = ch.doc.data().json;
+      if(cloud.lastJson[ch.doc.id]===json) return;
+      cloud.lastJson[ch.doc.id] = json;
+      var c = cloudParse(ch.doc); if(c) changed.push(c);
+    });
+    if(changed.length) cloudApplyRemote(changed);
+    if(cloud.status==="wait") cloudSetStatus("ok");
+  }, onErr));
+  cloud.unsubs.push(db.collection("meta").doc("vocab").onSnapshot(function(d){
+    if(!d.exists || d.metadata.hasPendingWrites) return;
+    var j = d.data().json; if(j===cloud.vocabJson) return; cloud.vocabJson = j;
+    try{ cloudApplyRemote([], {vocab:JSON.parse(j)}); }catch(e){}
+  }, onErr));
+  cloud.unsubs.push(db.collection("events").onSnapshot(function(snap){
+    var evs = [], removed = [];
+    snap.docChanges().forEach(function(ch){
+      if(ch.doc.metadata.hasPendingWrites) return;
+      if(ch.type==="removed"){ removed.push(ch.doc.id); return; }
+      try{ evs.push(JSON.parse(ch.doc.data().json)); }catch(e){}
+    });
+    if(evs.length || removed.length) cloudApplyEvents(evs, removed);
+  }, onErr));
+}
+async function cloudApplyRemote(cards, extra){
+  var skipId = editMode && draft ? draft.id : null;
+  var use = cards.filter(function(c){ return c.id!==skipId; });
+  var data = {cards:use, vocab:(extra&&extra.vocab)||{}, events:[], seqCounter:0, blobs:[]};
+  var res;
+  cloud.applying = true;
+  try{
+    var plan = buildSyncPlan(data);
+    res = await applySyncPlan(plan, data, null, {silent:true});
+  } finally { cloud.applying = false; }
+  (res.touched||[]).forEach(function(c){ if(cloud.lastJson[cloudDocId(c.id)] !== JSON.stringify(c)) cloudQueue(c.id); });
+  if(res.cards || (plan.vocabAdds||[]).length){ cloudRerender(); if(!editMode) showToast("다른 기기에서 고친 내용을 반영했습니다"); }
+}
+async function cloudApplyEvents(evs, removedIds){
+  cloud.applying = true;
+  try{
+    evs.forEach(function(e){
+      var i = (EVENTS||[]).findIndex(function(x){ return x.id===e.id; });
+      if(i===-1) EVENTS.push(e); else EVENTS[i] = e;
+      if(idb && canWrite) idbPut("events", e).catch(function(){});
+    });
+    removedIds.forEach(function(id){
+      EVENTS = (EVENTS||[]).filter(function(x){ return cloudDocId(x.id)!==id; });
+      if(idb && canWrite) idbDel("events", id).catch(function(){});
+    });
+  } finally { cloud.applying = false; }
+  if(location.hash==="#plan") cloudRerender();
+}
+function cloudHook(kind, name, val){
+  if(!cloud.on || !cloud.ready || cloud.applying) return;
+  if(kind==="put" && name==="cards" && val && val.id) cloudQueue(val.id);
+  else if(kind==="put" && name==="meta" && val && val.key==="vocab") cloudQueueVocab();
+  else if(kind==="put" && name==="events" && val) cloudPushEvent(val);
+  else if(kind==="del" && name==="events") cloud.db.collection("events").doc(cloudDocId(val)).delete().catch(cloudFail);
+}
+function cloudQueue(id){
+  if(!cloud.ready || cloud.applying) return;
+  cloud.queue[id] = 1;
+  cloudFlushSoon(700);
+}
+function cloudFlushSoon(ms){ clearTimeout(cloud.timer); cloud.timer = setTimeout(cloudFlush, ms); }
+async function cloudFlush(){
+  if(!cloud.ready) return;
+  var ids = Object.keys(cloud.queue); cloud.queue = {};
+  if(!ids.length) return;
+  cloudSetStatus("sync");
+  var failed = false;
+  for(var i=0;i<ids.length;i++){
+    try{ await cloudPushCard(ids[i]); }
+    catch(e){ failed = true; cloud.queue[ids[i]] = 1; cloudFail(e); }
+  }
+  if(failed){ cloudFlushSoon(5000); }
+  else if(!Object.keys(cloud.queue).length){ cloudSetStatus("ok"); }
+}
+function mergeCardPure(local, inc){
+  var out = cloneJSON(local);
+  var cp = planCardMerge(out, inc);
+  cp.card = out; cp.inc = inc; cp.doneMerged = mergeDone(out.done, inc.done);
+  applyCardPlan(cp, null, new Date().toISOString(), {noLog:true});
+  return out;
+}
+async function cloudPushCard(id){
+  var card = byId(id);
+  if(!card) return;
+  await cloudPushBlobsFor(card);
+  var ref = cloud.db.collection("cards").doc(cloudDocId(card.id));
+  var merged = null, jsonOut = "";
+  try{
+    await cloud.db.runTransaction(async function(t){
+      var snap = await t.get(ref), out = card;
+      if(snap.exists){
+        var cc = cloudParse(snap);
+        if(cc){
+          var li = cardIdentity(card), ci = cardIdentity(cc);
+          if(li && ci && li!==ci){ var err = new Error("collision"); err.collision = true; throw err; }
+          out = mergeCardPure(card, cc);
+        }
+      }
+      merged = out; jsonOut = JSON.stringify(out);
+      t.set(ref, {json:jsonOut, cid:out.cid||"", title:out.title||"", seq:out.seq||0, updatedAt:out.updatedAt||"", by:(cloud.user&&cloud.user.email)||""});
+    });
+  }catch(e){
+    if(e && e.collision){
+      var old = card.id, ids = nextSeqAndId(card.period);
+      card.id = ids.id; card.no = ids.no; card.seq = ids.seq;
+      cloud.applying = true;
+      try{ if(idb&&canWrite){ await idbDel("cards", old); await idbPut("cards", card); } } finally { cloud.applying = false; }
+      if(location.hash.indexOf(encodeURIComponent(old))!==-1) location.hash = "card/"+encodeURIComponent(card.id);
+      return cloudPushCard(card.id);
+    }
+    throw e;
+  }
+  cloud.lastJson[cloudDocId(card.id)] = jsonOut;
+  if(merged && JSON.stringify(card)!==jsonOut){
+    // 클라우드에 있던 다른 기기의 수정이 합쳐졌으니 이 기기에도 반영
+    var idx = CARDS.indexOf(card);
+    var fresh = JSON.parse(jsonOut);
+    if(idx!==-1 && !(editMode && draft && draft.id===card.id)){
+      CARDS[idx] = fresh;
+      cloud.applying = true;
+      try{ if(idb&&canWrite) await idbPut("cards", fresh); refreshSnaps(); } finally { cloud.applying = false; }
+      cloudRerender();
+    }
+  }
+}
+function cloudQueueVocab(){
+  clearTimeout(cloud.vocabTimer);
+  cloud.vocabTimer = setTimeout(async function(){
+    if(!cloud.ready) return;
+    try{
+      var ref = cloud.db.collection("meta").doc("vocab"), snap = await ref.get();
+      if(snap.exists){
+        try{ var cv = JSON.parse(snap.data().json);
+          Object.keys(cv).forEach(function(k){ if(Array.isArray(cv[k]) && Array.isArray(VOCAB[k]) && k!=="categories") cv[k].forEach(function(v){ if(VOCAB[k].indexOf(v)===-1) VOCAB[k].push(v); }); });
+        }catch(e){}
+      }
+      var j = JSON.stringify(VOCAB);
+      if(j===cloud.vocabJson) return;
+      cloud.vocabJson = j;
+      await ref.set({json:j});
+    }catch(e){ cloudFail(e); }
+  }, 900);
+}
+function cloudPushEvent(ev){
+  if(!cloud.ready || !ev || !ev.id) return;
+  cloud.db.collection("events").doc(cloudDocId(ev.id)).set({json:JSON.stringify(ev)}).catch(cloudFail);
+}
+/* 이미지 · 첨부: 700KB 이하로 줄여 blobs/{id}에 올리고, 다른 기기에서는 필요할 때 내려받습니다 */
+function cloudRefsOf(card){
+  var ids = {}, re = /\[\[img:([\w-]+)(?:\|[^\]]+)?\]\]/g, m, text = JSON.stringify(card);
+  while((m = re.exec(text))) ids[m[1]] = 1;
+  (card.images||[]).concat(card.files||[]).forEach(function(e){ if(e && e.id) ids[e.id] = 1; });
+  return Object.keys(ids);
+}
+function blobToDataB64(blob){
+  return new Promise(function(res, rej){ var fr = new FileReader(); fr.onload = function(){ res(String(fr.result).split(",")[1]||""); }; fr.onerror = function(){ rej(fr.error); }; fr.readAsDataURL(blob); });
+}
+async function shrinkImageBlob(blob){
+  if(blob.size<=CLOUD_BLOB_MAX || !/^image\//.test(blob.type||"") || /gif|svg/.test(blob.type)) return blob;
+  try{
+    var bmp = await createImageBitmap(blob);
+    var scale = Math.min(1, 1600/Math.max(bmp.width, bmp.height)), q = 0.85, out = blob;
+    for(var i=0;i<5 && out.size>CLOUD_BLOB_MAX;i++){
+      var cv = document.createElement("canvas"); cv.width = Math.max(1,Math.round(bmp.width*scale)); cv.height = Math.max(1,Math.round(bmp.height*scale));
+      cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+      out = await new Promise(function(r){ cv.toBlob(r, "image/jpeg", q); });
+      scale *= 0.8; q -= 0.08;
+    }
+    return out;
+  }catch(e){ return blob; }
+}
+async function cloudPushBlobsFor(card){
+  var ids = cloudRefsOf(card);
+  for(var i=0;i<ids.length;i++){
+    var id = ids[i];
+    if(cloud.blobSent[id] || !blobUrlCache[id]) continue;
+    try{
+      var blob = await (await fetch(blobUrlCache[id])).blob();
+      var meta = null;
+      try{ meta = idb ? await idbGet("blobs", id) : null; }catch(e){}
+      var small = await shrinkImageBlob(blob);
+      if(small.size > CLOUD_BLOB_MAX){
+        cloud.blobSent[id] = true;
+        if(!cloud.bigWarned){ cloud.bigWarned = true; showToast("⚠ 700KB가 넘는 파일은 온라인에 올리지 못해 이 기기에서만 보입니다"); }
+        continue;
+      }
+      var b64 = await blobToDataB64(small);
+      await cloud.db.collection("blobs").doc(id).set({b64:b64, type:small.type||"application/octet-stream", name:(meta&&meta.name)||"", size:small.size});
+      cloud.blobSent[id] = true;
+    }catch(e){ throw e; }
+  }
+}
+function cloudFetchBlob(bid){
+  if(!cloud.on || !cloud.ready || cloud.blobPending[bid] || cloud.blobSent["x"+bid]) return;
+  cloud.blobPending[bid] = true;
+  cloud.db.collection("blobs").doc(bid).get().then(function(d){
+    delete cloud.blobPending[bid];
+    if(!d.exists){ cloud.blobSent["x"+bid] = true; return; }
+    var v = d.data(), bin = atob(v.b64), arr = new Uint8Array(bin.length);
+    for(var j=0;j<bin.length;j++) arr[j] = bin.charCodeAt(j);
+    var blob = new Blob([arr], {type:v.type});
+    blobUrlCache[bid] = URL.createObjectURL(blob);
+    cloud.blobSent[bid] = true;
+    if(idb && canWrite){ cloud.applying = true; idbPut("blobs", {id:bid, blob:blob, name:v.name, contentType:v.type, sizeBytes:blob.size}).catch(function(){}).then(function(){ cloud.applying = false; }); }
+    cloudRerender();
+  }).catch(function(){ delete cloud.blobPending[bid]; });
+}
+
+function boot(){
+  if(!location.hash) location.hash = "toc";
+  wireHelpModalOnce();
+  document.getElementById("app").innerHTML = '<div class="loading-state gutter"><div class="spinner"></div>업무카드 데이터를 불러오는 중입니다…</div>';
+
+  openDB().then(function(d){
+    idb = d; storageOk = true; canWrite = true;
+    return idbAll("cards");
+  }).then(function(existing){
+    if(existing && existing.length){
+      CARDS = existing;
+      return idbGet("meta","vocab").then(function(v){ VOCAB = (v && v.value) || JSON.parse(JSON.stringify(SEED_VOCAB)); });
+    }
+    CARDS = SEED_CARDS.map(function(c){ return JSON.parse(JSON.stringify(c)); });
+    VOCAB = JSON.parse(JSON.stringify(SEED_VOCAB));
+    var writes = CARDS.map(function(c){ return idbPut("cards", c); });
+    writes.push(idbPut("meta", {key:"vocab", value:VOCAB}));
+    return Promise.all(writes);
+  }).then(function(){
+    return idbGet("meta","seqCounter");
+  }).then(function(sc){
+    var maxSeq = CARDS.reduce(function(m,c){return Math.max(m,c.seq||0);},0);
+    seqCounter = Math.max((sc && sc.value) || 0, maxSeq);
+    return idbAll("events");
+  }).then(function(existingEvents){
+    if(existingEvents && existingEvents.length){ EVENTS = existingEvents; return null; }
+    EVENTS = SEED_EVENTS.map(function(e){ return JSON.parse(JSON.stringify(e)); });
+    return Promise.all(EVENTS.map(function(e){ return idbPut("events", e); }));
+  }).then(function(){
+    return idbAll("blobs");
+  }).then(function(blobs){
+    (blobs||[]).forEach(function(b){ try{ blobUrlCache[b.id] = URL.createObjectURL(b.blob); }catch(e){} });
+    return Promise.all([idbGet("meta","syncState").catch(function(){return null;}), idbDel("meta","shareDirHandle").catch(function(){})]);
+  }).then(function(r){
+    if(r && r[0] && r[0].value) syncState = r[0].value;
+    return ensureDailyBackup();
+  }).then(function(){
+    migrateForwardFromSeed();
+    refreshSnaps();
+    route();
+    cloudInit();
+  }).catch(function(){
+    storageOk = false; canWrite = false;
+    CARDS = SEED_CARDS.slice();
+    VOCAB = JSON.parse(JSON.stringify(SEED_VOCAB));
+    EVENTS = SEED_EVENTS.slice();
+    seqCounter = CARDS.reduce(function(m,c){return Math.max(m,c.seq||0);},0);
+    route();
+    showToast("⚠ 이 브라우저에서는 로컬 저장소를 사용할 수 없어 변경사항이 저장되지 않습니다");
+  });
+}
+boot();
+
+window.addEventListener("keydown", function(e){
+  if(editMode) return;
+  if(e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if(location.hash.indexOf("card/")===0){
+    if(e.key==="Escape") location.hash="toc";
+  }
+});
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+rules_version = '2';
+// Firebase 콘솔 > Firestore Database > 규칙 에 붙여 넣고 [게시]하세요.
+// 아래 이메일을 본인 구글 계정으로 바꾸세요(여러 명이면 쉼표로 추가). 이 계정만 읽고 쓸 수 있습니다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function allowed() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['YOUR_EMAIL@gmail.com'];
+    }
+    match /cards/{id}  { allow read: if allowed(); allow write: if allowed() && request.resource.data.json.size() < 900000; }
+    match /meta/{id}   { allow read, write: if allowed(); }
+    match /events/{id} { allow read, write: if allowed(); }
+    match /blobs/{id}  { allow read: if allowed(); allow write: if allowed() && request.resource.data.b64.size() < 950000; }
+  }
+}
