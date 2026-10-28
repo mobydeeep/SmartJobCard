@@ -912,8 +912,8 @@ async function openBackupModal(){
     '<div class="hint" style="margin-bottom:8px">각 컴퓨터에서 따로 고친 뒤 파일 1개를 웹하드·메신저·USB 등으로 옮겨 서로 합칩니다. 서로 고친 <b>항목만</b> 합쳐지고, 한쪽만 고친 항목은 그대로 가져옵니다.</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
       '<label style="display:flex;align-items:center;gap:5px;font-size:12.5px"><input type="checkbox" id="sync-incl" checked> 이미지·첨부파일 포함</label>'+
-      '<button type="button" class="btn btn-sm btn-primary" id="sync-export">⬇ 동기화 파일 만들기</button>'+
-      '<label class="btn btn-sm">⬆ 상대 파일 가져와 합치기<input type="file" id="sync-import" accept=".json,application/json" style="display:none"></label>'+
+      '<button type="button" class="btn btn-sm btn-primary" id="sync-export">⬇ 동기화파일 다운로드</button>'+
+      '<label class="btn btn-sm">⬆ 동기화파일 업로드<input type="file" id="sync-import" accept=".json,application/json" style="display:none"></label>'+
       '<button type="button" class="btn btn-sm" id="sync-undo" hidden>↩ 직전 합치기 되돌리기</button>'+
     '</div>'+
     '<div id="sync-status" class="hint" style="margin-top:6px">'+esc(syncStatusText())+'</div>'+
@@ -940,8 +940,8 @@ async function openBackupModal(){
       markSynced("export");
       var st = document.getElementById("sync-status"); if(st) st.textContent = syncStatusText();
       showToast("동기화 파일을 만들었습니다 ("+fmtSize(size)+")");
-    }catch(e){ showToast("⚠ 동기화 파일 만들기에 실패했습니다"); }
-    btn.disabled = false; btn.textContent = "⬇ 동기화 파일 만들기";
+    }catch(e){ showToast("⚠ 동기화파일 다운로드에 실패했습니다"); }
+    btn.disabled = false; btn.textContent = "⬇ 동기화파일 다운로드";
   });
   document.getElementById("sync-import").addEventListener("change", async function(e){
     var f = e.target.files && e.target.files[0];
@@ -1380,9 +1380,9 @@ var HELP_HTML = {
 
     '<h3>🔄 두 컴퓨터 동기화</h3>'+
     '<ol>'+
-      '<li>컴퓨터 A에서 <b>"💾 백업"</b> → <b>"동기화 파일 만들기"</b>로 파일을 내려받습니다. (이미지·첨부 포함은 체크박스로 선택)</li>'+
+      '<li>컴퓨터 A에서 <b>"💾 백업"</b> → <b>"동기화파일 다운로드"</b>로 파일을 내려받습니다. (이미지·첨부 포함은 체크박스로 선택)</li>'+
       '<li>그 파일을 USB·메일·메신저 등 허용된 방법으로 컴퓨터 B에 옮깁니다.</li>'+
-      '<li>B에서 같은 창의 <b>"동기화 파일 가져오기"</b>로 파일을 고르면 <b>합치기 미리보기</b>가 나옵니다. 어떤 카드의 어떤 항목이 바뀌는지 확인하고 <b>"합치기 실행"</b>을 누르세요.</li>'+
+      '<li>B에서 같은 창의 <b>"동기화파일 업로드"</b>로 파일을 고르면 <b>합치기 미리보기</b>가 나옵니다. 어떤 카드의 어떤 항목이 바뀌는지 확인하고 <b>"합치기 실행"</b>을 누르세요.</li>'+
       '<li>B에서도 파일을 만들어 A에서 가져오면 양쪽이 같아집니다.</li>'+
     '</ol>'+
     '<ul>'+
@@ -1556,7 +1556,7 @@ function updateResults(){
         th("seq","No.")+th("category","분류")+th("title","업무명")+th("owner","담당자")+th("importance","중요도")+th("period","주기")+th("kpi","성과지표")+
       '</tr></thead><tbody>'+bodyRows+'</tbody></table></div>'
       : (total===0
-          ? '<div class="empty-state"><div class="big">업무카드가 아직 없습니다</div>오프라인 프로그램에서 만든 <b>동기화 파일</b>을 <b>더보기(또는 상단 💾 백업) → 동기화·백업 → 상대 파일 가져와 합치기</b>로 불러오면 모든 카드가 이 온라인 저장소에 올라갑니다.</div>'
+          ? '<div class="empty-state"><div class="big">업무카드가 아직 없습니다</div>오프라인 프로그램에서 만든 <b>동기화 파일</b>을 <b>더보기(또는 상단 💾 백업) → 동기화·백업 → 동기화파일 업로드</b>로 불러오면 모든 카드가 이 온라인 저장소에 올라갑니다.</div>'
           : '<div class="empty-state"><div class="big">검색 결과가 없습니다</div>조건을 바꾸거나 첫화면으로 돌아가 보세요.</div>'));
 
   var container = document.getElementById("toc-results");
