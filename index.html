@@ -71,6 +71,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .brand h1{font-size:19px;font-weight:700;letter-spacing:-.01em}
 .brand .sub{color:var(--fg-muted);font-size:13px}
 .brand-name{font-size:1.45em;font-weight:800;letter-spacing:-.015em}
+.brand-name .bn-main{font-size:1.45em;line-height:1}
+.brand-name .bn-sub{font-size:.42em;font-weight:600;letter-spacing:0;color:var(--fg-muted);margin-left:2px}
+.brand-name .bn-sub b{color:#D93025;font-weight:800}
 .brand h1[data-home]{cursor:pointer;user-select:none}
 .brand h1[data-home]:hover .brand-name{color:var(--accent)}
 .brand h1 small{font-size:12.5px;font-weight:400;color:var(--fg-muted);letter-spacing:0;margin-left:.3em}
@@ -486,6 +489,7 @@ tr.sel-on{background:color-mix(in srgb,var(--accent) 9%,transparent)}
   .brand .sub{display:none}
   .brand h1{white-space:normal;line-height:1.15}
   .brand h1 .brand-name{font-size:1.4em}
+  .brand-name .bn-sub{display:block;margin:2px 0 0}
   .brand h1 small{display:block;font-size:10.5px;margin-left:0;margin-top:1px}
   .brand .count{font-size:12px;flex:none}
   .search-row{display:flex;gap:8px;margin-bottom:6px}
@@ -1643,7 +1647,7 @@ function renderTOC(){
 
   app.innerHTML =
     '<div class="topbar gutter">'+
-      '<div class="brand"><h1 data-home="1" title="첫 화면으로" role="link" tabindex="0"><span class="brand-name">Oscar</span></h1><span class="count tnum" id="toc-total"></span></div>'+
+      '<div class="brand"><h1 data-home="1" title="첫 화면으로" role="link" tabindex="0"><span class="brand-name"><span class="bn-main">Oscar</span><span class="bn-sub"> (<b>O</b> <b>S</b>martjob <b>Car</b>d)</span></span></h1><span class="count tnum" id="toc-total"></span></div>'+
       navBarHtml("toc")+
       '<div class="search-row">'+
         '<div class="search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>'+
@@ -2234,7 +2238,7 @@ function renderPlan(){
 
   app.innerHTML =
     '<div class="topbar gutter">'+
-      '<div class="brand"><h1 data-home="1" title="첫 화면으로" role="link" tabindex="0"><span class="brand-name">Oscar</span></h1><span class="sub">연간업무계획</span></div>'+
+      '<div class="brand"><h1 data-home="1" title="첫 화면으로" role="link" tabindex="0"><span class="brand-name"><span class="bn-main">Oscar</span><span class="bn-sub"> (<b>O</b> <b>S</b>martjob <b>Car</b>d)</span></span></h1><span class="sub">연간업무계획</span></div>'+
       navBarHtml("plan")+mchips+
       '<div class="toolbar" style="padding-top:0">'+
         '<div class="chiprow" style="margin:0"><button type="button" class="chip'+(!planShowAll?" active":"")+'" data-show="important">★4 이상 주요 업무만</button><button type="button" class="chip'+(planShowAll?" active":"")+'" data-show="all">전체 업무 보기</button><button type="button" class="chip" id="btn-plan-pick" title="분류별로 연간계획 표에 띄울 업무카드를 선택합니다">☑ 표시할 업무 선택'+(hiddenN?' ('+hiddenN+'건 숨김)':'')+'</button></div>'+
@@ -2633,8 +2637,9 @@ function renderCard(id){
 
 function renderCardShell(id, isNew){
   var app = document.getElementById("app");
-  var idxSorted = CARDS.slice().sort(function(a,b){return (a.seq||0)-(b.seq||0);});
+  var idxSorted = filteredRows();
   var idx = idxSorted.findIndex(function(c){return c.id===id;});
+  if(idx<0){ idxSorted = CARDS.filter(function(c){return !c.deleted;}).sort(function(a,b){return (a.seq||0)-(b.seq||0);}); idx = idxSorted.findIndex(function(c){return c.id===id;}); }
   var card = editMode && draft ? draft : byId(id);
   if(!card){ document.getElementById("app").innerHTML = '<div class="gutter"><div class="empty-state"><div class="big">카드를 찾을 수 없습니다</div><a href="#toc">목차로 돌아가기</a></div></div>'; return; }
   var prevId = (!isNew && idx>0) ? idxSorted[idx-1].id : null;
@@ -3405,7 +3410,7 @@ function cloudShowLogin(msg){
     document.body.appendChild(o);
   }
   o.style.alignItems = "center";
-  o.innerHTML = '<div class="log-panel" style="max-width:380px;text-align:center"><h3 style="font-size:17px">☁ <span class="brand-name">Oscar</span></h3>'+
+  o.innerHTML = '<div class="log-panel" style="max-width:380px;text-align:center"><h3 style="font-size:17px">☁ <span class="brand-name"><span class="bn-main">Oscar</span><span class="bn-sub"> (<b>O</b> <b>S</b>martjob <b>Car</b>d)</span></span></h3>'+
     '<p style="color:var(--fg-muted);font-size:13.5px;margin:8px 0 14px">편집 권한이 있는 구글 계정으로 로그인하면 업무카드를 고칠 수 있습니다. 로그인하지 않아도 업무카드는 볼 수 있습니다(보기 전용).</p>'+
     (msg?'<div class="note" style="margin-bottom:10px">'+esc(msg)+'</div>':'')+
     '<button type="button" class="btn btn-primary" id="cloud-signin" style="width:100%;justify-content:center">구글 계정으로 로그인</button>'+
