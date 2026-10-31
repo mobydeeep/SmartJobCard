@@ -73,7 +73,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .brand-name{font-size:1.45em;font-weight:800;letter-spacing:-.015em}
 .brand-name .bn-main{font-size:1.45em;line-height:1}
 .brand-name .bn-sub{font-size:.42em;font-weight:600;letter-spacing:0;color:var(--fg-muted);margin-left:2px}
-.brand-name .bn-sub b{color:#D93025;font-weight:800}
+.brand-name .bn-sub b{color:#2E9E5B;font-weight:800}
 .brand h1[data-home]{cursor:pointer;user-select:none}
 .brand h1[data-home]:hover .brand-name{color:var(--accent)}
 .brand h1 small{font-size:12.5px;font-weight:400;color:var(--fg-muted);letter-spacing:0;margin-left:.3em}
@@ -259,6 +259,7 @@ datalist{}
 #splash svg{width:84px;height:84px;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35));animation:spPop .7s cubic-bezier(.2,.9,.3,1.2) both}
 #splash .sp-ring{stroke-dasharray:226;stroke-dashoffset:226;animation:spDraw .9s .15s ease forwards}
 #splash .sp-chk{stroke-dasharray:46;stroke-dashoffset:46;animation:spDraw .5s .75s ease forwards}
+#splash .sp-name b{color:#fff;animation:spGlow .5s .9s both}
 #splash .sp-name{font-size:30px;font-weight:800;letter-spacing:-.015em;animation:spUp .6s .3s both}
 #splash .sp-sub{font-size:13.5px;letter-spacing:.04em;color:#cfe0f5;animation:spUp .6s .5s both}
 #splash .sp-sub b{color:#fff;font-weight:800;font-size:15px}
@@ -568,7 +569,7 @@ tr.sel-on{background:color-mix(in srgb,var(--accent) 9%,transparent)}
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><svg viewBox="0 0 84 84" fill="none"><circle class="sp-ring" cx="42" cy="42" r="36" stroke="#fff" stroke-width="7" stroke-linecap="round" transform="rotate(-90 42 42)"/><path class="sp-chk" d="M27 43l10 10 20-22" stroke="#7fe0a0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="sp-name">Oscar System</div><div class="sp-sub">Mobydeeep</div></div>
+<div id="splash" aria-hidden="true"><svg viewBox="0 0 84 84" fill="none"><circle class="sp-ring" cx="42" cy="42" r="36" stroke="#fff" stroke-width="7" stroke-linecap="round" transform="rotate(-90 42 42)"/><path class="sp-chk" d="M27 43l10 10 20-22" stroke="#7fe0a0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="sp-name"><b>Oscar</b> System</div><div class="sp-sub">Mobydeeep</div></div>
 <script>(function(){var sp=document.getElementById("splash");if(!sp)return;var skip=false;
 try{if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches)skip=true;}catch(e){}
 function intro(){var b=document.body;b.classList.add("intro");setTimeout(function(){b.classList.remove("intro");},1500);}
