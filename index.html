@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#1B3A63">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Oscar System (오봉관리역 스마트잡 카드)</title>
+<title>Oscar</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -288,6 +288,7 @@ body.intro table.toc tbody tr:nth-child(8){animation-delay:.35s}body.intro table
 /* 선택 출력 / 모아찍기 */
 #print-batch{display:none}
 #btn-print-mode.active{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.new-n{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;margin-left:6px;border-radius:9px;background:#D93025;color:#fff;font-size:10.5px;font-weight:800;line-height:1;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .selbox{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 .selbox input,.selall input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
 .selall{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
@@ -563,7 +564,7 @@ tr.sel-on{background:color-mix(in srgb,var(--accent) 9%,transparent)}
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><svg viewBox="0 0 84 84" fill="none"><circle class="sp-ring" cx="42" cy="42" r="36" stroke="#fff" stroke-width="7" stroke-linecap="round" transform="rotate(-90 42 42)"/><path class="sp-chk" d="M27 43l10 10 20-22" stroke="#7fe0a0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="sp-name">Oscar System</div><div class="sp-sub"><b>오</b>봉관리역 <b>스</b>마트잡 <b>카</b>드</div></div>
+<div id="splash" aria-hidden="true"><svg viewBox="0 0 84 84" fill="none"><circle class="sp-ring" cx="42" cy="42" r="36" stroke="#fff" stroke-width="7" stroke-linecap="round" transform="rotate(-90 42 42)"/><path class="sp-chk" d="M27 43l10 10 20-22" stroke="#7fe0a0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="sp-name">Oscar</div></div>
 <script>(function(){var sp=document.getElementById("splash");if(!sp)return;var skip=false;
 try{if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches)skip=true;}catch(e){}
 function intro(){var b=document.body;b.classList.add("intro");setTimeout(function(){b.classList.remove("intro");},1500);}
@@ -1642,7 +1643,7 @@ function renderTOC(){
 
   app.innerHTML =
     '<div class="topbar gutter">'+
-      '<div class="brand"><h1 data-home="1" title="첫 화면으로" role="link" tabindex="0"><span class="brand-name">Oscar System</span> <small>(<b>오</b>봉관리역 <b>스</b>마트잡 <b>카</b>드)</small></h1><span class="count tnum" id="toc-total"></span></div>'+
+      '<div class="brand"><h1 data-home="1" title="첫 화면으로" role="link" tabindex="0"><span class="brand-name">Oscar</span></h1><span class="count tnum" id="toc-total"></span></div>'+
       navBarHtml("toc")+
       '<div class="search-row">'+
         '<div class="search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>'+
@@ -1659,7 +1660,7 @@ function renderTOC(){
       '<div class="chiprow">'+catChips+'</div>'+
     '</div>'+
     '<div class="gutter"><div id="toc-results"></div></div>'+
-    '<footer class="note gutter">인쇄하려면 브라우저 인쇄 기능(Ctrl/Cmd + P)을 사용하세요 · 표가 그대로 인쇄됩니다<br>오봉관리역 서무 임승진, 이효나 제작</footer>';
+    '<footer class="note gutter">인쇄하려면 브라우저 인쇄 기능(Ctrl/Cmd + P)을 사용하세요 · 표가 그대로 인쇄됩니다<br>임승진, 이효나 제작</footer>';
 
   function th(key,label){
     var arrow = state.sortKey===key ? (state.sortDir===1?"▲":"▼") : "";
@@ -1783,7 +1784,7 @@ function updateResults(){
     return '<tr tabindex="0" data-id="'+esc(r.id)+'"'+(selIds[r.id]?' class="sel-on"':'')+'>'+
       '<td class="cell-no tnum">'+(selectMode?'<label class="selbox" title="출력할 카드 선택"><input type="checkbox" data-sel="'+esc(r.id)+'"'+(selIds[r.id]?' checked':'')+' aria-label="선택"> '+esc(r.no)+'</label>':esc(r.no))+'</td>'+
       '<td>'+esc((r.category||"").replace(/^.*?\.\s*/,""))+'</td>'+
-      '<td class="cell-title">'+esc(r.title)+titleBadgeFor(r)+snippetHtml(r)+'</td>'+
+      '<td class="cell-title">'+esc(r.title)+newBadgeHtml(r)+titleBadgeFor(r)+snippetHtml(r)+'</td>'+
       '<td>'+esc(r.owner)+'</td>'+
       '<td><span class="stars">'+stars+'</span></td>'+
       '<td>'+periodBadges(r)+'</td>'+
@@ -2189,7 +2190,7 @@ function renderPlan(){
       return '<div class="pm-cat">'+esc(cat)+' · '+items.length+'건</div>'+items.map(function(c){
         var rl = ruleLabel(c.schedule_rule), isDone = isDoneKey(c, periodKey(planYear, pmMo));
         var st = "★★★★★☆☆☆☆☆".slice(5-(c.importance||0),10-(c.importance||0));
-        return '<div class="pm-row'+(isDone?' done':'')+'" data-goto-card="'+esc(c.id)+'"><span class="no">'+esc(c.no)+'</span><span>'+(isDone?'✓ ':'')+esc(c.title)+'</span>'+periodBadges(c)+(rl?'<span class="rule">'+esc(rl)+'</span>':'')+'<span class="st">'+st+'</span></div>';
+        return '<div class="pm-row'+(isDone?' done':'')+'" data-goto-card="'+esc(c.id)+'"><span class="no">'+esc(c.no)+'</span><span>'+(isDone?'✓ ':'')+esc(c.title)+newBadgeHtml(c)+'</span>'+periodBadges(c)+(rl?'<span class="rule">'+esc(rl)+'</span>':'')+'<span class="st">'+st+'</span></div>';
       }).join("");
     }).join("");
     var pmEvents = (EVENTS||[]).filter(function(ev){ return ev.month===pmMo; }).map(function(ev){ return '<div class="plan-chip plan-chip-event" style="margin-top:6px">📌 '+esc(ev.title||"(제목 없음)")+(ev.note?' · '+esc(ev.note):'')+'</div>'; }).join("");
@@ -2233,7 +2234,7 @@ function renderPlan(){
 
   app.innerHTML =
     '<div class="topbar gutter">'+
-      '<div class="brand"><h1 data-home="1" title="첫 화면으로" role="link" tabindex="0"><span class="brand-name">Oscar System</span> <small>(<b>오</b>봉관리역 <b>스</b>마트잡 <b>카</b>드)</small></h1><span class="sub">연간업무계획</span></div>'+
+      '<div class="brand"><h1 data-home="1" title="첫 화면으로" role="link" tabindex="0"><span class="brand-name">Oscar</span></h1><span class="sub">연간업무계획</span></div>'+
       navBarHtml("plan")+mchips+
       '<div class="toolbar" style="padding-top:0">'+
         '<div class="chiprow" style="margin:0"><button type="button" class="chip'+(!planShowAll?" active":"")+'" data-show="important">★4 이상 주요 업무만</button><button type="button" class="chip'+(planShowAll?" active":"")+'" data-show="all">전체 업무 보기</button><button type="button" class="chip" id="btn-plan-pick" title="분류별로 연간계획 표에 띄울 업무카드를 선택합니다">☑ 표시할 업무 선택'+(hiddenN?' ('+hiddenN+'건 숨김)':'')+'</button></div>'+
@@ -2247,7 +2248,7 @@ function renderPlan(){
         '<div id="ev-list">'+evRows+'</div>'+
         '<button class="btn btn-sm" id="btn-add-event">+ 일정 추가</button>'+
       '</div>'+
-      '<footer class="note">업무카드의 "업무 일정 기준"(주기/일자 설정)이 그대로 연동되어 표시됩니다 · 카드를 수정하면 이 표에도 바로 반영됩니다<br>오봉관리역 서무 임승진, 이효나 제작</footer>'+
+      '<footer class="note">업무카드의 "업무 일정 기준"(주기/일자 설정)이 그대로 연동되어 표시됩니다 · 카드를 수정하면 이 표에도 바로 반영됩니다<br>임승진, 이효나 제작</footer>'+
     '</div>';
 
   wireNavBar(app);
@@ -2378,6 +2379,17 @@ function extraPeriodPicker(card){
     PERIODS.filter(function(p){return p!==card.period;}).map(function(p){
       return '<label class="pe-opt"><input type="checkbox" data-period-extra="'+esc(p)+'"'+(ex.indexOf(p)!==-1?" checked":"")+'> '+esc(p)+'</label>';
     }).join("")+'</span>';
+}
+var RECENT_DAYS = 3;
+function recentEditInfo(card){
+  if(!card || card.deleted || !card.updatedAt) return null;
+  var t = Date.parse(card.updatedAt); if(isNaN(t)) return null;
+  var days = (Date.now()-t)/86400000;
+  return (days>=0 && days<RECENT_DAYS) ? t : (days<0 ? t : null);
+}
+function newBadgeHtml(card){
+  var t = recentEditInfo(card);
+  return t ? '<span class="new-n" title="최근 '+RECENT_DAYS+'일 안에 수정됨 ('+esc(fmtTs(card.updatedAt))+')">N</span>' : "";
 }
 function titleBadgeFor(card){
   var today = new Date(), ts = getTrackStart(), we = weekEndOf(today);
@@ -2880,7 +2892,7 @@ function renderCardShell(id, isNew){
       sectionsHtml+
       filesHtml+
       (isNew?'':doneBlockHtml(card))+
-      '<div class="print-only print-foot"><span>'+esc(card.no)+' · Oscar System (오봉관리역 스마트잡 카드)</span><span class="print-stamp">출력일시: '+esc(fmtTs(new Date().toISOString()))+'</span></div>'+
+      '<div class="print-only print-foot"><span>'+esc(card.no)+' · Oscar</span><span class="print-stamp">출력일시: '+esc(fmtTs(new Date().toISOString()))+'</span></div>'+
       (editMode?'<div class="edit-actions"><button class="btn btn-ghost" id="btn-cancel2">취소</button><button class="btn btn-primary" id="btn-save2">저장</button></div>':'')+
     '</div>'+
     (logPanelOpen ? logOverlayHtml(card) : '')+
@@ -3393,7 +3405,7 @@ function cloudShowLogin(msg){
     document.body.appendChild(o);
   }
   o.style.alignItems = "center";
-  o.innerHTML = '<div class="log-panel" style="max-width:380px;text-align:center"><h3 style="font-size:17px">☁ <span class="brand-name">Oscar System</span> <small style="font-size:12px;font-weight:400;color:var(--fg-muted)">(<b style="font-weight:700">오</b>봉관리역 <b style="font-weight:700">스</b>마트잡 <b style="font-weight:700">카</b>드)</small></h3>'+
+  o.innerHTML = '<div class="log-panel" style="max-width:380px;text-align:center"><h3 style="font-size:17px">☁ <span class="brand-name">Oscar</span></h3>'+
     '<p style="color:var(--fg-muted);font-size:13.5px;margin:8px 0 14px">편집 권한이 있는 구글 계정으로 로그인하면 업무카드를 고칠 수 있습니다. 로그인하지 않아도 업무카드는 볼 수 있습니다(보기 전용).</p>'+
     (msg?'<div class="note" style="margin-bottom:10px">'+esc(msg)+'</div>':'')+
     '<button type="button" class="btn btn-primary" id="cloud-signin" style="width:100%;justify-content:center">구글 계정으로 로그인</button>'+

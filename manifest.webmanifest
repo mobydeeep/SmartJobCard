@@ -1,6 +1,6 @@
 {
   "id": "./",
-  "name": "Oscar System (오봉관리역 스마트잡 카드)",
+  "name": "Oscar",
   "short_name": "Oscar",
   "start_url": "./index.html",
   "scope": "./",
